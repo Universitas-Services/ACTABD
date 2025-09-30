@@ -1,0 +1,91 @@
+// prisma/schema.prisma
+
+// 1. Configuración del proveedor de base de datos y la URL
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") // Lee la URL desde el archivo .env
+}
+
+// 2. Configuración del generador del cliente de Prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 3. --- Definición de tus Modelos (Tablas) ---
+
+model User {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  password          String
+  nombre            String
+  apellido          String? // El '?' significa que es opcional (puede ser NULL)
+  telefono          String?
+  role              String    @default("User")
+  isEmailVerified   Boolean   @default(false) @map("is_email_verified")
+  confirmationToken String?   @unique @map("confirmation_token")
+  otp               String?
+  otpExpiresAt      DateTime? @map("otp_expires_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Relaciones
+  profile     UserProfile?  // Un usuario puede tener un perfil
+  actas       Acta[]        // Un usuario puede tener muchas actas
+  chatHistory ChatHistory[] // Un usuario puede tener muchos historiales de chat
+}
+
+model UserProfile {
+  id               String  @id @default(uuid())
+  institucion      String
+  cargo            String
+  plazoEntregaActa String? @map("plazo_entrega_acta")
+
+  // Relación uno a uno con el usuario
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String @unique // La llave foránea
+}
+
+model Acta {
+  id          String   @id @default(uuid())
+  numeroActa  String   @unique @map("numero_acta")
+  type        ActaType
+  nombreEntidad String @map("nombre_entidad")
+  ciudad      String
+  estado      String
+  fecha       DateTime
+  metadata    Json?    // Soporte nativo para JSON/JSONB
+
+  // Relación muchos a uno con el usuario
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  createdAt DateTime @default(now()) @map("created_at")
+}
+
+model ChatHistory {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  userMessage String   @db.Text
+  botResponse String   @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relación con el usuario
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+}
+
+model TokenDenylist {
+  id     String   @id @default(uuid())
+  token  String   @db.Text
+  expiry DateTime
+}
+
+// Definición de tipos de acta
+enum ActaType {
+  ENTRANTE_GRATIS
+  SALIENTE_GRATIS
+  MAXIMA_AUTORIDAD_GRATIS
+  MAXIMA_AUTORIDAD_PAGA
+  ENTRANTE_PAGA
+  SALIENTE_PAGA
+}
