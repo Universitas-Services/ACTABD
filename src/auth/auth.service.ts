@@ -11,13 +11,15 @@ import { CreateAuthDto } from './dto/create-auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import { User } from '@prisma/client';
+import { EmailService } from '../email/email.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
-
+import * as crypto from 'crypto';
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private emailService: EmailService,
   ) {}
 
   async register(
@@ -25,7 +27,7 @@ export class AuthService {
   ): Promise<Omit<User, 'password'>> {
     const { email, password, nombre, apellido, telefono } = createAuthDto;
 
-    const existingUser = await this.prisma.user.findUnique({
+    const existingUser: User | null = await this.prisma.user.findUnique({
       where: { email },
     });
     if (existingUser) {
@@ -33,16 +35,29 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = await this.prisma.user.create({
+    const confirmationToken = crypto.randomBytes(32).toString('hex');
+    const newUser: User = await this.prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         nombre,
         apellido,
         telefono,
+        confirmationToken: confirmationToken,
       },
     });
+    if (newUser) {
+      try {
+        // --- 👇 4. Pasa el token recién generado al servicio de email ---
+        await this.emailService.sendConfirmationEmail(
+          newUser.email,
+          confirmationToken, // Usa la variable local del token
+          newUser.nombre,
+        );
+      } catch (error: any) {
+        console.error('Error al enviar el correo de confirmación:', error);
+      }
+    }
 
     // Llama al método estático desde JwtStrategy
     return JwtStrategy.excludePassword(newUser);
@@ -52,7 +67,9 @@ export class AuthService {
     email: string,
     pass: string,
   ): Promise<Omit<User, 'password'> | null> {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user: User | null = await this.prisma.user.findUnique({
+      where: { email },
+    });
 
     if (user && (await bcrypt.compare(pass, user.password))) {
       // Llama al método estático desde JwtStrategy
@@ -62,14 +79,11 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    const validatedUser = await this.validateUser(
-      loginDto.email,
-      loginDto.password,
-    );
+    const validatedUser: Omit<User, 'password'> | null =
+      await this.validateUser(loginDto.email, loginDto.password);
     if (!validatedUser) {
       throw new UnauthorizedException('Credenciales inválidas.');
     }
-
     const payload = {
       sub: validatedUser.id,
       email: validatedUser.email,

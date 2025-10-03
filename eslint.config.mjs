@@ -12,37 +12,21 @@ export default tseslint.config(
     ignores: ['eslint.config.mjs', 'dist/', 'node_modules/'],
   },
 
-  // Configuraciones base
+  // Configuración base de ESLint
   eslint.configs.recommended,
-  ...tseslint.configs.recommended, // Usamos la recomendada sin tipos primero
 
-  // 👇 --- INICIO DE LA CORRECCIÓN --- 👇
-  // Configuración específica para archivos TypeScript con reglas que requieren tipos
+  // Configuración ÚNICA y AVANZADA para todos los archivos TypeScript
   {
-    files: ['**/*.ts'], // Aplicamos esta sección solo a archivos .ts
-    extends: [...tseslint.configs.recommendedTypeChecked],
+    files: ['**/*.ts'],
+    extends: [...tseslint.configs.recommendedTypeChecked], // Usamos solo la configuración que revisa tipos
     languageOptions: {
       parserOptions: {
-        // Le indicamos explícitamente que busque el tsconfig.json más cercano
         project: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
-  },
-  // 👆 --- FIN DE LA CORRECCIÓN --- 👆
-
-  // Configuración de Prettier (debe ir al final)
-  eslintPluginPrettierRecommended,
-
-  // Reglas personalizadas y globales
-  {
-    languageOptions: {
-      globals: {
-        ...globals.node,
-        ...globals.jest,
-      },
-    },
     rules: {
+      // Aquí movemos las reglas específicas de TypeScript
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-unsafe-argument': 'warn',
@@ -53,6 +37,19 @@ export default tseslint.config(
           varsIgnorePattern: '^_',
         },
       ],
+    },
+  },
+
+  // Configuración de Prettier (debe ir al final)
+  eslintPluginPrettierRecommended,
+
+  // Configuración para globales (node, jest, etc.)
+  {
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.jest,
+      },
     },
   },
 );
