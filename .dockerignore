@@ -1,0 +1,21 @@
+# Archivos de Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Dependencias locales
+node_modules
+
+# Archivos de build
+dist
+npm-debug.log
+
+# Git
+.git
+.gitignore
+
+# Entorno local
+.env
+
+# Scripts locales de desarrollo o verificación
+verify-docker.ps1
