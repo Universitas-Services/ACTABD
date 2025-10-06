@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module'; // <-- ¡Impórtalo aquí!
 import { UsersModule } from './users/users.module';
 import { ActasModule } from './actas/actas.module';
 import { EmailModule } from './email/email.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { EmailModule } from './email/email.module';
     AuthModule,
     UsersModule,
     ActasModule,
-    EmailModule, // <-- ¡Y añádelo a la lista de imports!
+    EmailModule,
+    AiModule, // <-- ¡Y añádelo a la lista de imports!
   ],
   controllers: [AppController],
   providers: [AppService],
