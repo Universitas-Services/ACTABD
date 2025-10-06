@@ -1,18 +1,34 @@
 // src/ai/ai.controller.ts
 
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, HttpStatus } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { SendMessageDto } from '../auth/dto/send-message.dto';
 import type { User } from '@prisma/client';
-
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+@ApiTags('Chatbot AI') // <-- Agrupa bajo "Chatbot AI"
+@ApiBearerAuth()
 @Controller('ai')
 @UseGuards(JwtAuthGuard)
 export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('message')
+  @ApiOperation({ summary: 'Enviar un mensaje al agente de IA' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Devuelve la respuesta del agente y el ID de la sesión.',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'No autorizado.',
+  })
   async handleMessage(
     @Body() sendMessageDto: SendMessageDto,
     @GetUser() user: User,
