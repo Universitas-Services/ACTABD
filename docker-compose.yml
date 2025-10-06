@@ -1,41 +1,37 @@
-# Indica la versión del formato de Docker Compose que estamos usando.
-# La versión 3.8 es moderna y compatible con la mayoría de las funcionalidades.
 version: '3.8'
 
-# 'services' es donde definimos cada contenedor que queremos ejecutar.
-# En este caso, solo tenemos uno: la base de datos.
 services:
-  # 'db' es el nombre que le damos a nuestro servicio/contenedor de PostgreSQL.
-  # Podrás referenciarlo con este nombre desde tu API de Nest.js.
-  db:
-    # 'image' especifica qué imagen de Docker queremos usar.
-    # 'postgres:15' nos dará la versión 15 de PostgreSQL.
-    image: postgres:15
-
-    # 'restart: always' asegura que el contenedor se reinicie automáticamente
-    # si se detiene por alguna razón (ej. al reiniciar tu computadora).
+  # Servicio para el backend de NestJS
+  api:
+    build: . # Le dice a Docker que construya la imagen usando el Dockerfile en la misma carpeta
+    container_name: universitas_api
     restart: always
-
-    # 'environment' nos permite configurar variables de entorno dentro del contenedor.
-    # Estas son las credenciales para nuestra base de datos.
-    # ¡IMPORTANTE! En un entorno de producción, nunca escribas las contraseñas
-    # directamente aquí. Usa un archivo .env y referéncialo.
+    ports:
+      - '3000:3000' # Mapea el puerto 3000 del contenedor al puerto 3000 de tu máquina
+    volumes:
+      - .:/usr/src/app # Sincroniza tu código local con el del contenedor para desarrollo
+      - /usr/src/app/node_modules # Evita que los node_modules locales sobrescriban los del contenedor
     environment:
-      POSTGRES_USER: admin # El nombre de usuario para la base de datos.
-      POSTGRES_PASSWORD: mysecretpassword # La contraseña para ese usuario.
-      POSTGRES_DB: acta_entrega_db # El nombre de la base de datos que se creará automáticamente.
+      # Conecta a la base de datos del servicio 'db'
+      DATABASE_URL: 'postgresql://admin:mysecretpassword@db:5432/acta_entrega_db?schema=public'
+      JWT_SECRET: 'tu-super-secreto-de-desarrollo' # Puedes cambiarlo o usar un .env
+      # ... otras variables de entorno que necesites ...
+    depends_on:
+      - db # Asegura que el servicio 'db' se inicie antes que el 'api'
 
-    # 'ports' mapea un puerto de tu máquina (host) a un puerto dentro del contenedor.
-    # La sintaxis es "PUERTO_HOST:PUERTO_CONTENEDOR".
-    # Esto nos permite conectarnos a la base de datos desde nuestra máquina
-    # en el puerto 5433, que se redirigirá al puerto 5432 dentro del contenedor.
-    # Usamos 5433 para evitar conflictos si ya tienes PostgreSQL instalado localmente.
+  # Servicio para la base de datos PostgreSQL
+  db:
+    image: postgres:15
+    container_name: universitas_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: acta_entrega_db
     ports:
       - '5433:5432'
-
-    # 'volumes' se usa para persistir los datos. Sin esto, cada vez que
-    # elimines el contenedor, perderías toda tu información.
-    # Esto crea una carpeta llamada 'postgres_data' en tu máquina y la sincroniza
-    # con la carpeta donde PostgreSQL guarda sus datos dentro del contenedor.
     volumes:
       - ./postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
