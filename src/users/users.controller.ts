@@ -1,8 +1,5 @@
 // src/users/users.controller.ts
 
-// 👇 Añade HttpStatus a esta línea
-
-import { ChangePasswordDto } from '../auth/dto/change-password.dto'; // Importa el nuevo DTO
 import {
   Controller,
   Get,
@@ -11,14 +8,15 @@ import {
   Body,
   Post,
   Delete,
+  HttpStatus, // Importa HttpStatus
 } from '@nestjs/common';
-import { UpdateUserDto } from '../auth/dto/update-user.dto';
-import { HttpStatus } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import type { User } from '@prisma/client';
-import { DeleteAccountDto } from '../auth/dto/delete-account.dto'; // Importa el nuevo DTO
+import { UpdateUserDto } from '../auth/dto/update-user.dto';
+import { ChangePasswordDto } from '../auth/dto/change-password.dto';
+import { DeleteAccountDto } from '../auth/dto/delete-account.dto';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -26,8 +24,8 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 
-@ApiTags('Usuarios')
-@ApiBearerAuth()
+@ApiTags('Usuarios') // Agrupa todos estos endpoints bajo la etiqueta "Usuarios"
+@ApiBearerAuth() // Indica que todas las rutas aquí requieren autenticación Bearer (JWT)
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 export class UsersController {
@@ -35,35 +33,55 @@ export class UsersController {
 
   @Get('profile')
   @ApiOperation({ summary: 'Obtener el perfil del usuario autenticado' })
-  // Ahora ESLint sabrá que HttpStatus.OK es un número válido
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Devuelve los datos del perfil del usuario.',
   })
-  // Y que HttpStatus.UNAUTHORIZED también lo es
   @ApiResponse({
     status: HttpStatus.UNAUTHORIZED,
-    description: 'No autorizado (token inválido o no provisto).',
+    description: 'No autorizado.',
   })
   getProfile(@GetUser() user: User) {
     return user;
   }
+
   @Patch('profile')
-  updateProfile(
-    @GetUser() user: User, // Obtenemos el usuario autenticado del token
-    @Body() updateUserDto: UpdateUserDto, // Obtenemos los datos a actualizar del body
-  ) {
+  @ApiOperation({ summary: 'Actualizar el perfil del usuario autenticado' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Perfil actualizado exitosamente.',
+  })
+  updateProfile(@GetUser() user: User, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(user.id, updateUserDto);
   }
 
   @Post('password/change')
+  @ApiOperation({ summary: 'Cambiar la contraseña del usuario' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Contraseña actualizada exitosamente.',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'La contraseña actual es incorrecta.',
+  })
   changePassword(
     @GetUser() user: User,
     @Body() changePasswordDto: ChangePasswordDto,
   ) {
     return this.usersService.changePassword(user.id, changePasswordDto);
   }
-  @Delete('me') // Usamos 'me' como convención para "el usuario actual"
+
+  @Delete('me')
+  @ApiOperation({ summary: 'Eliminar la cuenta del usuario autenticado' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'La cuenta ha sido eliminada permanentemente.',
+  })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'La contraseña es incorrecta.',
+  })
   deleteAccount(
     @GetUser() user: User,
     @Body() deleteAccountDto: DeleteAccountDto,
