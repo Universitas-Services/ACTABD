@@ -1,5 +1,4 @@
 // src/main.ts
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -28,11 +27,15 @@ async function bootstrap() {
     }),
   );
   app.enableCors({
-    //origin: 'https://la-url-de-tu-frontend.com', // ❗️ IMPORTANTE: Reemplaza esto con la URL real de tu frontend
+    // En producción, deberías restringir esto a la URL de tu frontend
+    // Por ahora, '*' permitirá que Swagger funcione desde cualquier lugar.
+    origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
+  // La línea `await app.listen(...)` fue eliminada de aquí.
 
+  // La única llamada a app.listen() se queda aquí, al final.
   await app.listen(process.env.PORT ?? 3000);
 }
 
