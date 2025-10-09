@@ -27,7 +27,11 @@ COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/prisma ./prisma
 
+# Copia y da permisos de ejecución al script de inicio
+COPY start.sh .
+RUN chmod +x ./start.sh
+
 EXPOSE 3000
 
 # El comando de inicio se configurará en Render, no aquí.
-CMD ["node", "dist/main"]
+CMD ["./start.sh"]
