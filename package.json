@@ -18,7 +18,8 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prisma:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@google-cloud/dialogflow-cx": "^5.3.0",
@@ -39,7 +40,8 @@
     "reflect-metadata": "^0.2.2",
     "resend": "^6.1.2",
     "rxjs": "^7.8.1",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "prisma": "^6.16.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -61,7 +63,6 @@
     "husky": "^9.1.7",
     "jest": "^30.0.0",
     "prettier": "^3.4.2",
-    "prisma": "^6.16.2",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
     "ts-jest": "^29.2.5",
