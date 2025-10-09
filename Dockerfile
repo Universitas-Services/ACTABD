@@ -17,6 +17,10 @@ COPY . .
 # Generamos el cliente de Prisma (esencial para que funcione en el build)
 RUN npx prisma generate
 
+# ----  👇 AÑADE ESTA LÍNEA AQUÍ 👇 ----
+# Ejecuta las migraciones de la base de datos para producción
+RUN npm run prisma:deploy
+
 # Construimos la aplicación de NestJS (compila de TypeScript a JavaScript)
 RUN npm run build
 
