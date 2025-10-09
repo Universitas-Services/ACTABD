@@ -18,6 +18,11 @@ FROM node:20-alpine
 
 WORKDIR /usr/src/app
 
+# Copia el package.json para que los scripts de npm (como "start:prod") funcionen
+COPY --from=builder /usr/src/app/package*.json ./
+
+# Copia el package.json para que los scripts de npm (como "start:prod") funcionen
+COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/prisma ./prisma
