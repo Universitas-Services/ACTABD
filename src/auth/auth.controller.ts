@@ -1,5 +1,5 @@
 // src/auth/auth.controller.ts
-import { Controller, Post, Body, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpStatus, Get, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { LoginDto } from './dto/login.dto';
@@ -39,5 +39,20 @@ export class AuthController {
   })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
+  }
+
+  @Get('confirm-email/:token') // Define la ruta con un parámetro 'token'
+  @ApiOperation({ summary: 'Confirmar el correo electrónico de un usuario' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Correo electrónico verificado exitosamente.',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Token inválido o expirado.',
+  })
+  async confirmEmail(@Param('token') token: string) {
+    // @Param('token') extrae el token de la URL
+    return this.authService.confirmEmail(token);
   }
 }

@@ -4,6 +4,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
@@ -93,5 +94,27 @@ export class AuthService {
     return {
       access_token: this.jwtService.sign(payload),
     };
+  }
+  async confirmEmail(token: string) {
+    // 1. Busca al usuario por el token de confirmación
+    const user = await this.prisma.user.findUnique({
+      where: { confirmationToken: token },
+    });
+
+    // 2. Si no se encuentra un usuario, el token es inválido o ya fue usado
+    if (!user) {
+      throw new NotFoundException('Token de confirmación inválido o expirado.');
+    }
+
+    // 3. Actualiza al usuario: marca el email como verificado y borra el token
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        isEmailVerified: true,
+        confirmationToken: null, // ¡Importante! Invalida el token para que no se use de nuevo
+      },
+    });
+
+    return { message: 'Correo electrónico verificado exitosamente.' };
   }
 }
