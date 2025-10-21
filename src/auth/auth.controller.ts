@@ -3,16 +3,19 @@ import { Controller, Post, Body, HttpStatus, Get, Param } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { LoginDto } from './dto/login.dto';
-// --- 👇 1. Importa los decoradores de Swagger ---
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
-@ApiTags('Autenticación') // <-- Agrupa todos los endpoints de este controlador bajo "Autenticación"
+// --- 👇 AÑADE ESTAS TRES LÍNEAS DE IMPORTACIÓN ---
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+
+@ApiTags('Autenticación')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
-  // --- 👇 2. Decora el endpoint ---
   @ApiOperation({ summary: 'Registrar un nuevo usuario' })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -27,7 +30,6 @@ export class AuthController {
   }
 
   @Post('login')
-  // --- 👇 3. Decora también el login ---
   @ApiOperation({ summary: 'Iniciar sesión' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -41,7 +43,7 @@ export class AuthController {
     return this.authService.login(loginDto);
   }
 
-  @Get('confirm-email/:token') // Define la ruta con un parámetro 'token'
+  @Get('confirm-email/:token')
   @ApiOperation({ summary: 'Confirmar el correo electrónico de un usuario' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -52,7 +54,27 @@ export class AuthController {
     description: 'Token inválido o expirado.',
   })
   async confirmEmail(@Param('token') token: string) {
-    // @Param('token') extrae el token de la URL
     return this.authService.confirmEmail(token);
+  }
+
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Solicitar reseteo de contraseña' })
+  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(forgotPasswordDto.email);
+  }
+
+  @Post('verify-otp')
+  @ApiOperation({ summary: 'Verificar el código OTP' })
+  async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto) {
+    return this.authService.verifyOtp(verifyOtpDto.email, verifyOtpDto.otp);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Restablecer la contraseña con un nuevo valor' })
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    return this.authService.resetPassword(
+      resetPasswordDto.email,
+      resetPasswordDto.newPassword,
+    );
   }
 }

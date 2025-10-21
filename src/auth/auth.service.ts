@@ -4,6 +4,7 @@ import {
   Injectable,
   ConflictException,
   UnauthorizedException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,16 +13,51 @@ import { CreateAuthDto } from './dto/create-auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
 import { User } from '@prisma/client';
-import { EmailService } from '../email/email.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import * as crypto from 'crypto';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config'; // Importa ConfigService
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private emailService: EmailService,
+    private configService: ConfigService,
   ) {}
+
+  private async getTokens(userId: string, email: string, role: string) {
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(
+        { sub: userId, email, role },
+        {
+          secret: this.configService.get<string>('JWT_SECRET'),
+          expiresIn: '15m', // Access token de corta duración
+        },
+      ),
+      this.jwtService.signAsync(
+        { sub: userId },
+        {
+          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          expiresIn: this.configService.get<string>('JWT_REFRESH_EXPIRATION'),
+        },
+      ),
+    ]);
+
+    return {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    };
+  }
+
+  // --- 👇 MÉTODO PRIVADO PARA ACTUALIZAR EL REFRESH TOKEN EN LA BD ---
+  private async updateRefreshToken(userId: string, refreshToken: string) {
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { hashedRefreshToken },
+    });
+  }
 
   async register(
     createAuthDto: CreateAuthDto,
@@ -48,19 +84,13 @@ export class AuthService {
       },
     });
     if (newUser) {
-      try {
-        // --- 👇 4. Pasa el token recién generado al servicio de email ---
-        await this.emailService.sendConfirmationEmail(
-          newUser.email,
-          confirmationToken, // Usa la variable local del token
-          newUser.nombre,
-        );
-      } catch (error: any) {
-        console.error('Error al enviar el correo de confirmación:', error);
-      }
+      await this.emailService.sendConfirmationEmail(
+        newUser.email,
+        confirmationToken,
+        newUser.nombre,
+      );
     }
 
-    // Llama al método estático desde JwtStrategy
     return JwtStrategy.excludePassword(newUser);
   }
 
@@ -73,48 +103,135 @@ export class AuthService {
     });
 
     if (user && (await bcrypt.compare(pass, user.password))) {
-      // Llama al método estático desde JwtStrategy
       return JwtStrategy.excludePassword(user);
     }
     return null;
   }
 
   async login(loginDto: LoginDto) {
-    const validatedUser: Omit<User, 'password'> | null =
-      await this.validateUser(loginDto.email, loginDto.password);
+    const validatedUser = await this.validateUser(
+      loginDto.email,
+      loginDto.password,
+    );
     if (!validatedUser) {
       throw new UnauthorizedException('Credenciales inválidas.');
     }
-    const payload = {
-      sub: validatedUser.id,
-      email: validatedUser.email,
-      role: validatedUser.role,
-    };
 
-    return {
-      access_token: this.jwtService.sign(payload),
-    };
+    // 1. Genera ambos tokens
+    const tokens = await this.getTokens(
+      validatedUser.id,
+      validatedUser.email,
+      validatedUser.role,
+    );
+
+    // 2. Guarda el hash del nuevo refresh token en la BD
+    await this.updateRefreshToken(validatedUser.id, tokens.refresh_token);
+
+    // 3. Devuelve ambos tokens al usuario
+    return tokens;
   }
+
   async confirmEmail(token: string) {
-    // 1. Busca al usuario por el token de confirmación
+    console.log('Intentando confirmar email con el token:', token);
     const user = await this.prisma.user.findUnique({
       where: { confirmationToken: token },
     });
 
-    // 2. Si no se encuentra un usuario, el token es inválido o ya fue usado
     if (!user) {
+      console.error('No se encontró ningún usuario con el token:', token);
       throw new NotFoundException('Token de confirmación inválido o expirado.');
     }
+    console.log('Usuario encontrado para el token:', user.email);
 
-    // 3. Actualiza al usuario: marca el email como verificado y borra el token
     await this.prisma.user.update({
       where: { id: user.id },
       data: {
         isEmailVerified: true,
-        confirmationToken: null, // ¡Importante! Invalida el token para que no se use de nuevo
+        confirmationToken: null,
       },
     });
 
     return { message: 'Correo electrónico verificado exitosamente.' };
+  }
+
+  async refreshTokens(userId: string, refreshToken: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+
+    // Comprueba si el usuario existe y tiene un token guardado
+    if (!user || !user.hashedRefreshToken) {
+      throw new ForbiddenException('Acceso denegado');
+    }
+
+    // Compara el token proporcionado con el hash de la BD
+    const refreshTokenMatches = await bcrypt.compare(
+      refreshToken,
+      user.hashedRefreshToken,
+    );
+
+    if (!refreshTokenMatches) {
+      throw new ForbiddenException('Acceso denegado');
+    }
+
+    // Si todo es correcto, genera un nuevo par de tokens
+    const tokens = await this.getTokens(user.id, user.email, user.role);
+    // Actualiza el nuevo refresh token en la BD
+    await this.updateRefreshToken(user.id, tokens.refresh_token);
+    return tokens;
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      return {
+        message:
+          'Si existe una cuenta con este correo, se ha enviado un código de recuperación.',
+      };
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.prisma.user.update({
+      where: { email },
+      data: { otp, otpExpiresAt },
+    });
+
+    await this.emailService.sendPasswordResetOtp(user.email, otp, user.nombre);
+
+    return {
+      message:
+        'Si existe una cuenta con este correo, se ha enviado un código de recuperación.',
+    };
+  }
+
+  async verifyOtp(email: string, otp: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (
+      !user ||
+      !user.otpExpiresAt ||
+      user.otp !== otp ||
+      new Date() > user.otpExpiresAt
+    ) {
+      throw new UnauthorizedException('OTP inválido o expirado.');
+    }
+
+    await this.prisma.user.update({
+      where: { email },
+      data: { otp: null, otpExpiresAt: null },
+    });
+
+    return { message: 'OTP verificado exitosamente.' };
+  }
+
+  async resetPassword(email: string, newPassword: string) {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await this.prisma.user.update({
+      where: { email },
+      data: { password: hashedPassword },
+    });
+
+    return { message: 'Contraseña actualizada exitosamente.' };
   }
 }
