@@ -1,14 +1,38 @@
 // src/auth/auth.controller.ts
-import { Controller, Post, Body, HttpStatus, Get, Param } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpStatus,
+  Get,
+  Param,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { LoginDto } from './dto/login.dto';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 
 // --- 👇 AÑADE ESTAS TRES LÍNEAS DE IMPORTACIÓN ---
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto'; // Importar el nuevo DTO
+
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { Request } from 'express';
+interface RequestWithAccessTokenPayload extends Request {
+  user: {
+    id: string;
+    // ...otros campos...
+  };
+}
 
 @ApiTags('Autenticación')
 @Controller('auth')
@@ -76,5 +100,35 @@ export class AuthController {
       resetPasswordDto.email,
       resetPasswordDto.newPassword,
     );
+  }
+
+  @Post('refresh')
+  @ApiOperation({ summary: 'Refrescar tokens (rotación) usando el body' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Nuevos tokens generados.',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Refresh token inválido/expirado.',
+  })
+  async refreshTokens(@Body() refreshTokenDto: RefreshTokenDto) {
+    return await this.authService.refreshTokens(refreshTokenDto.refreshToken);
+  }
+
+  // --- 👇👇👇 AÑADE ESTE MÉTODO PARA LOGOUT 👇👇👇 ---
+  @UseGuards(JwtAuthGuard) // Protegido por el access token
+  @ApiBearerAuth()
+  @Post('logout')
+  @ApiOperation({ summary: 'Cerrar sesión (invalidar refresh token)' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Sesión cerrada.' })
+  @ApiResponse({
+    status: HttpStatus.UNAUTHORIZED,
+    description: 'No autorizado.',
+  })
+  async logout(@Req() req: RequestWithAccessTokenPayload) {
+    // Usa la interfaz correcta
+    const userId = req.user.id;
+    return this.authService.logout(userId); // Llama al servicio
   }
 }

@@ -13,6 +13,7 @@ import { AiModule } from './ai/ai.module';
 import { TasksModule } from './tasks/tasks.module';
 //import { AdminModule } from './admin/admin.module';
 import { AdminModule } from './admin/admin.module';
+import { ActaComplianceModule } from './acta-compliance/acta-compliance.module';
 
 @Module({
   imports: [
@@ -27,7 +28,8 @@ import { AdminModule } from './admin/admin.module';
     TasksModule, // <-- ¡Y añádelo a la lista de imports!
     //AdminModule, // Añade AdminModule si existe
     TasksModule,
-    AdminModule, // <-- 4. Añade TasksModule
+    AdminModule,
+    ActaComplianceModule, // <-- 4. Añade TasksModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -29,7 +29,7 @@ async function bootstrap() {
   app.enableCors({
     // En producción, deberías restringir esto a la URL de tu frontend
     // Por ahora, '*' permitirá que Swagger funcione desde cualquier lugar.
-    origin: '*',
+    origin: 'http://localhost:3001',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });

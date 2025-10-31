@@ -7,7 +7,7 @@ import { JwtStrategy } from '../auth/strategies/jwt.strategy';
 import { ChangePasswordDto } from '../auth/dto/change-password.dto';
 import { DeleteAccountDto } from '../auth/dto/delete-account.dto'; // Importa el nuevo DTO
 import { CompleteProfileDto } from '../auth/dto/complete-profile.dto';
-import * as bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
