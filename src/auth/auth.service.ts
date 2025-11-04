@@ -46,8 +46,8 @@ export class AuthService {
       this.jwtService.signAsync(
         { sub: userId, nonce: crypto.randomBytes(16).toString('hex') },
         {
-          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-          expiresIn: this.configService.get('JWT_REFRESH_EXPIRATION'),
+          secret: this.configService.get<string>('JWT_SECRET'),
+          expiresIn: '7d', // Using a fixed expiration for refresh token
         },
       ),
     ]);
@@ -227,7 +227,7 @@ export class AuthService {
       payload = await this.jwtService.verifyAsync<{ sub: string }>(
         refreshTokenFromRequest,
         {
-          secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+          secret: this.configService.get<string>('JWT_SECRET'),
         },
       );
     } catch (error) {
