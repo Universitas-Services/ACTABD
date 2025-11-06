@@ -106,4 +106,51 @@ export class EmailService {
       throw error;
     }
   }
+  // ---
+  // --- 1. AÑADE ESTE NUEVO MÉTODO ---
+  // ---
+  /**
+   * Envía un correo con un adjunto en PDF.
+   * @param to El email del destinatario.
+   * @param userName El nombre del usuario.
+   * @param subject El asunto del correo.
+   * @param pdfBuffer El buffer del archivo PDF.
+   * @param fileName El nombre del archivo adjunto.
+   */
+  async sendReportWithAttachment(
+    to: string,
+    userName: string,
+    subject: string,
+    pdfBuffer: Buffer,
+    fileName: string,
+  ) {
+    const fromEmail = this.configService.get<string>('FROM_EMAIL');
+    if (!fromEmail) {
+      throw new Error('FROM_EMAIL no está definida en el archivo .env');
+    }
+
+    try {
+      console.log(`Intentando enviar reporte con adjunto a: ${to}`);
+      await this.resend.emails.send({
+        from: `Reportes Universitas <${fromEmail}>`, //
+        to: [to], //
+        subject: subject,
+        html: `<p>Hola, ${userName},</p><p>Adjunto encontrarás tu reporte de auditoría generado.</p>`,
+        attachments: [
+          {
+            filename: fileName,
+            content: pdfBuffer, // Resend/Nodemailer aceptan Buffers
+          },
+        ],
+      });
+      console.log(`Reporte enviado exitosamente a: ${to}`); //
+      console.log('PDF Buffer:', pdfBuffer);
+      console.log('File Name:', fileName);
+      console.log('PDF Buffer:', pdfBuffer);
+      console.log('File Name:', fileName);
+    } catch (error) {
+      console.error(`Error al enviar reporte con adjunto a: ${to}`, error); //
+      throw error;
+    }
+  }
 }
