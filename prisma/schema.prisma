@@ -11,6 +11,11 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum UserRole {
+  USER      // Usuario gratuito estándar
+  PAID_USER // Usuario pago (Pro)
+  ADMIN     // Administrador
+}
 // 3. --- Definición de tus Modelos (Tablas) ---
 
 model User {
@@ -18,20 +23,22 @@ model User {
   email             String    @unique
   password          String
   nombre            String
-  apellido          String? // El '?' significa que es opcional (puede ser NULL)
-  telefono          String?
-  role              String    @default("User")
+  apellido          String?   // El '?' significa que es opcional (puede ser NULL)
+  telefono          String?  
+  role              UserRole  @default(USER)
   isEmailVerified   Boolean   @default(false) @map("is_email_verified")
   confirmationToken String?   @unique @map("confirmation_token")
-  otp               String?
+  otp               String?  
   otpExpiresAt      DateTime? @map("otp_expires_at")
+  hashedRefreshToken  String?  
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
-  profile     UserProfile?  // Un usuario puede tener un perfil
-  actas       Acta[]        // Un usuario puede tener muchas actas
+  profile     UserProfile? 
+  actas       Acta[]        // Actas generadas POR este usuario
   chatHistory ChatHistory[] // Un usuario puede tener muchos historiales de chat
+  complianceChecks ActaCompliance[] // <-- AÑADIDO: Revisiones de cumplimiento hechas por este usuario
 }
 
 model UserProfile {
@@ -60,6 +67,8 @@ model Acta {
   userId String
 
   createdAt DateTime @default(now()) @map("created_at")
+  
+  // La relación inversa 'complianceCheck' ha sido ELIMINADA de aquí
 }
 
 model ChatHistory {
@@ -79,6 +88,136 @@ model TokenDenylist {
   token  String   @db.Text
   expiry DateTime
 }
+
+// --- NUEVO MODELO PARA EL CUMPLIMIENTO DEL ACTA ---
+model ActaCompliance {
+  id        String    @id @default(uuid())
+  
+  // --- Relación con el Usuario (quién hizo la revisión) ---
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  // --- Datos Generales (del acta EXTERNA revisada) ---
+  correo_electronico        String?
+  rif_organo_entidad        String?
+  nombre_completo_revisor   String?
+  denominacion_cargo        String?
+  nombre_organo_entidad     String?
+  nombre_unidad_revisora    String?
+  fecha_revision            DateTime?
+  codigo_documento_revisado String?
+
+  // --- Preguntas de Cumplimiento (Boolean? permite SI=true, NO=false, NULO=sin respuesta) ---
+  q1_acta_contiene_lugar_suscripcion         Boolean? @map("q1_acta_contiene_lugar_suscripcion")
+  q2_acta_contiene_fecha_suscripcion         Boolean? @map("q2_acta_contiene_fecha_suscripcion")
+  q3_acta_identifica_organo_entregado        Boolean? @map("q3_acta_identifica_organo_entregado")
+  q4_acta_identifica_servidor_entrega        Boolean? @map("q4_acta_identifica_servidor_entrega")
+  q5_acta_identifica_servidor_recibe         Boolean? @map("q5_acta_identifica_servidor_recibe")
+  q6_acta_describe_motivo_entrega            Boolean? @map("q6_acta_describe_motivo_entrega")
+  q7_acta_describe_fundamento_legal          Boolean? @map("q7_acta_describe_fundamento_legal")
+  q8_acta_contiene_relacion_anexos_normas    Boolean? @map("q8_acta_contiene_relacion_anexos_normas")
+  q9_acta_expresa_integracion_anexos         Boolean? @map("q9_acta_expresa_integracion_anexos")
+  q10_acta_suscrita_por_quien_entrega        Boolean? @map("q10_acta_suscrita_por_quien_entrega")
+  q11_acta_suscrita_por_quien_recibe         Boolean? @map("q11_acta_suscrita_por_quien_recibe")
+  q12_anexa_informacion_adicional            Boolean? @map("q12_anexa_informacion_adicional")
+  q13_anexos_con_fecha_corte_al_cese         Boolean? @map("q13_anexos_con_fecha_corte_al_cese")
+  q14_acta_deja_constancia_inexistencia_info Boolean? @map("q14_acta_deja_constancia_inexistencia_info")
+  q15_acta_especifica_errores_omisiones      Boolean? @map("q15_acta_especifica_errores_omisiones")
+  q16_acta_elaborada_original_y_3_copias     Boolean? @map("q16_acta_elaborada_original_y_3_copias")
+  q17_incluye_autorizacion_certificar_copias Boolean? @map("q17_incluye_autorizacion_certificar_copias")
+  q18_original_archivado_despacho_autoridad  Boolean? @map("q18_original_archivado_despacho_autoridad")
+  q19_copia_certificada_entregada_a_servidor_recibe Boolean? @map("q19_copia_certificada_entregada_a_servidor_recibe")
+  q20_copia_certificada_entregada_a_servidor_entrega Boolean? @map("q20_copia_certificada_entregada_a_servidor_entrega")
+  q21_copia_entregada_auditoria_interna_en_plazo Boolean? @map("q21_copia_entregada_auditoria_interna_en_plazo")
+  q22_anexo_estado_cuentas_general             Boolean? @map("q22_anexo_estado_cuentas_general")
+  q23_anexo_situacion_presupuestaria_detallada Boolean? @map("q23_anexo_situacion_presupuestaria_detallada")
+  q24_anexo_gastos_comprometidos_no_causados   Boolean? @map("q24_anexo_gastos_comprometidos_no_causados")
+  q25_anexo_gastos_causados_no_pagados         Boolean? @map("q25_anexo_gastos_causados_no_pagados")
+  q26_anexo_estado_presupuestario_por_partidas Boolean? @map("q26_anexo_estado_presupuestario_por_partidas")
+  q27_anexo_estado_presupuestario_por_cuentas  Boolean? @map("q27_anexo_estado_presupuestario_por_cuentas")
+  q28_anexo_estados_financieros                Boolean? @map("q28_anexo_estados_financieros")
+  q29_anexo_balance_comprobacion_y_notas       Boolean? @map("q29_anexo_balance_comprobacion_y_notas")
+  q30_anexo_estado_situacion_financiera_y_notas Boolean? @map("q30_anexo_estado_situacion_financiera_y_notas")
+  q31_anexo_estado_rendimiento_financiero_y_notas Boolean? @map("q31_anexo_estado_rendimiento_financiero_y_notas")
+  q32_anexo_estado_movimiento_patrimonio_y_notas Boolean? @map("q32_anexo_estado_movimiento_patrimonio_y_notas")
+  q33_anexo_relacion_cuentas_por_cobrar        Boolean? @map("q33_anexo_relacion_cuentas_por_cobrar")
+  q34_anexo_relacion_cuentas_por_pagar         Boolean? @map("q34_anexo_relacion_cuentas_por_pagar")
+  q35_anexo_relacion_fondos_terceros           Boolean? @map("q35_anexo_relacion_fondos_terceros")
+  q36_anexo_situacion_fondos_anticipo          Boolean? @map("q36_anexo_situacion_fondos_anticipo")
+  q37_anexo_situacion_caja_chica               Boolean? @map("q37_anexo_situacion_caja_chica")
+  q38_anexo_acta_arqueo_caja_chica             Boolean? @map("q38_anexo_acta_arqueo_caja_chica")
+  q39_anexo_listado_registro_proveedores       Boolean? @map("q39_anexo_listado_registro_proveedores")
+  q40_anexo_reporte_libros_contables           Boolean? @map("q40_anexo_reporte_libros_contables")
+  q41_anexo_reporte_cuentas_bancarias          Boolean? @map("q41_anexo_reporte_cuentas_bancarias")
+  q42_anexo_reporte_conciliaciones_bancarias   Boolean? @map("q42_anexo_reporte_conciliaciones_bancarias")
+  q43_anexo_reporte_retenciones_pendientes     Boolean? @map("q43_anexo_reporte_retenciones_pendientes")
+  q44_anexo_reporte_contrataciones_publicas    Boolean? @map("q44_anexo_reporte_contrataciones_publicas")
+  q45_anexo_reporte_fideicomiso_prestaciones   Boolean? @map("q45_anexo_reporte_fideicomiso_prestaciones")
+  q46_anexo_reporte_bonos_vacacionales         Boolean? @map("q46_anexo_reporte_bonos_vacacionales")
+  q47_anexo_mencion_numero_cargos_rrhh         Boolean? @map("q47_anexo_mencion_numero_cargos_rrhh")
+  q48_incluye_cuadro_resumen_cargos            Boolean? @map("q48_incluye_cuadro_resumen_cargos")
+  q49_cuadro_resumen_cargos_validado_rrhh      Boolean? @map("q49_cuadro_resumen_cargos_validado_rrhh")
+  q50_anexo_reporte_nominas                    Boolean? @map("q50_anexo_reporte_nominas")
+  q51_anexo_inventario_bienes                  Boolean? @map("q51_anexo_inventario_bienes")
+  q52_inventario_bienes_fecha_entrega          Boolean? @map("q52_inventario_bienes_fecha_entrega")
+  q53_inventario_bienes_comprobado_fisicamente Boolean? @map("q53_inventario_bienes_comprobado_fisicamente")
+  q54_verificada_existencia_bienes_inventario  Boolean? @map("q54_verificada_existencia_bienes_inventario")
+  q55_verificada_condicion_bienes_inventario   Boolean? @map("q55_verificada_condicion_bienes_inventario")
+  q56_inventario_indica_responsable_patrimonial Boolean? @map("q56_inventario_indica_responsable_patrimonial")
+  q57_inventario_indica_responsable_uso        Boolean? @map("q57_inventario_indica_responsable_uso")
+  q58_inventario_indica_fecha_verificacion     Boolean? @map("q58_inventario_indica_fecha_verificacion")
+  q59_inventario_indica_numero_acta_verificacion Boolean? @map("q59_inventario_indica_numero_acta_verificacion")
+  q60_inventario_indica_numero_registro_bien   Boolean? @map("q60_inventario_indica_numero_registro_bien")
+  q61_inventario_indica_codigo_bien            Boolean? @map("q61_inventario_indica_codigo_bien")
+  q62_inventario_indica_descripcion_bien       Boolean? @map("q62_inventario_indica_descripcion_bien")
+  q63_inventario_indica_marca_bien             Boolean? @map("q63_inventario_indica_marca_bien")
+  q64_inventario_indica_modelo_bien            Boolean? @map("q64_inventario_indica_modelo_bien")
+  q65_inventario_indica_serial_bien            Boolean? @map("q65_inventario_indica_serial_bien")
+  q66_inventario_indica_estado_conservacion_bien Boolean? @map("q66_inventario_indica_estado_conservacion_bien")
+  q67_inventario_indica_ubicacion_bien         Boolean? @map("q67_inventario_indica_ubicacion_bien")
+  q68_inventario_indica_valor_mercado_bien     Boolean? @map("q68_inventario_indica_valor_mercado_bien")
+  q69_anexo_ejecucion_poa                      Boolean? @map("q69_anexo_ejecucion_poa")
+  q70_incluye_ejecucion_poa_fecha_entrega      Boolean? @map("q70_incluye_ejecucion_poa_fecha_entrega")
+  q71_incluye_causas_incumplimiento_metas_poa  Boolean? @map("q71_incluye_causas_incumplimiento_metas_poa")
+  q72_incluye_plan_operativo_anual             Boolean? @map("q72_incluye_plan_operativo_anual")
+  q73_anexo_indice_general_archivo             Boolean? @map("q73_anexo_indice_general_archivo")
+  q74_archivo_indica_clasificacion             Boolean? @map("q74_archivo_indica_clasificacion")
+  q75_archivo_indica_ubicacion_fisica          Boolean? @map("q75_archivo_indica_ubicacion_fisica")
+  q76_incluye_relacion_montos_fondos_asignados Boolean? @map("q76_incluye_relacion_montos_fondos_asignados")
+  q77_incluye_saldo_efectivo_fondos            Boolean? @map("q77_incluye_saldo_efectivo_fondos")
+  q78_incluye_relacion_bienes_asignados        Boolean? @map("q78_incluye_relacion_bienes_asignados")
+  q79_incluye_relacion_bienes_unidad_bienes    Boolean? @map("q79_incluye_relacion_bienes_unidad_bienes")
+  q80_incluye_estados_bancarios_conciliados    Boolean? @map("q80_incluye_estados_bancarios_conciliados")
+  q81_incluye_lista_comprobantes_gastos        Boolean? @map("q81_incluye_lista_comprobantes_gastos")
+  q82_incluye_cheques_pendientes_cobro         Boolean? @map("q82_incluye_cheques_pendientes_cobro")
+  q83_incluye_reporte_transferencias_bancarias Boolean? @map("q83_incluye_reporte_transferencias_bancarias")
+  q84_anexo_caucion_funcionario_admin          Boolean? @map("q84_anexo_caucion_funcionario_admin")
+  q85_incluye_cuadro_liquidado_recaudado       Boolean? @map("q85_incluye_cuadro_liquidado_recaudado")
+  q86_incluye_relacion_expedientes_investigacion Boolean? @map("q86_incluye_relacion_expedientes_investigacion")
+  q87_incluye_situacion_tesoro_nacional        Boolean? @map("q87_incluye_situacion_tesoro_nacional")
+  q88_incluye_ejecucion_presupuesto_nacional   Boolean? @map("q88_incluye_ejecucion_presupuesto_nacional")
+  q89_incluye_monto_deuda_publica_nacional     Boolean? @map("q89_incluye_monto_deuda_publica_nacional")
+  q90_incluye_situacion_cuentas_nacion         Boolean? @map("q90_incluye_situacion_cuentas_nacion")
+  q91_incluye_situacion_tesoro_estadal         Boolean? @map("q91_incluye_situacion_tesoro_estadal")
+  q92_incluye_ejecucion_presupuesto_estadal    Boolean? @map("q92_incluye_ejecucion_presupuesto_estadal")
+  q93_incluye_situacion_cuentas_estadal        Boolean? @map("q93_incluye_situacion_cuentas_estadal")
+  q94_incluye_situacion_tesoro_municipal       Boolean? @map("q94_incluye_situacion_tesoro_municipal")
+  q95_incluye_ejecucion_presupuesto_municipal  Boolean? @map("q95_incluye_ejecucion_presupuesto_municipal")
+  q96_incluye_situacion_cuentas_municipal      Boolean? @map("q96_incluye_situacion_cuentas_municipal")
+  q97_incluye_inventario_terrenos_municipales  Boolean? @map("q97_incluye_inventario_terrenos_municipales")
+  q98_incluye_relacion_ingresos_venta_terrenos Boolean? @map("q98_incluye_relacion_ingresos_venta_terrenos")
+
+  // --- Resultados Calculados ---
+  puntajeCalculado    Float?   @map("puntaje_calculado")
+  resumenCumplimiento String?  @db.Text @map("resumen_cumplimiento")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("acta_compliance") // Nombre de la tabla en la base de datos
+}
+
 
 // Definición de tipos de acta
 enum ActaType {

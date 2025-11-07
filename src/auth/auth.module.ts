@@ -7,23 +7,22 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { RefreshTokenStrategy } from './strategies/refresh-token.strategy'; // Importa la nueva estrategia
+
 @Module({
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
-    // Importamos el JwtModule de forma asíncrona para poder usar el ConfigService
-
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        // Leemos el secreto desde el archivo .env
         secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '3h' }, // El token expirará en 3 horas
+        signOptions: { expiresIn: '15m' }, // Expiración corta para el access token
       }),
     }),
   ],
-  controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  controllers: [AuthController], // <-- AÑADE UNA COMA AQUÍ
+  providers: [AuthService, JwtStrategy, RefreshTokenStrategy], // Esta es la línea que estabas añadiendo
   exports: [JwtStrategy, PassportModule],
 })
 export class AuthModule {}

@@ -1,12 +1,13 @@
 // src/users/users.service.ts
 import { UnauthorizedException } from '@nestjs/common';
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from '../auth/dto/update-user.dto';
 import { JwtStrategy } from '../auth/strategies/jwt.strategy';
 import { ChangePasswordDto } from '../auth/dto/change-password.dto';
 import { DeleteAccountDto } from '../auth/dto/delete-account.dto'; // Importa el nuevo DTO
-import * as bcrypt from 'bcryptjs';
+import { CompleteProfileDto } from '../auth/dto/complete-profile.dto';
+import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
@@ -74,5 +75,35 @@ export class UsersService {
     await this.prisma.user.delete({ where: { id } });
 
     return { message: 'La cuenta ha sido eliminada permanentemente.' };
+  }
+
+  async completeProfile(
+    userId: string,
+    completeProfileDto: CompleteProfileDto,
+  ) {
+    const { institucion, cargo, plazoEntregaActa } = completeProfileDto;
+
+    // Verifica si el usuario ya tiene un perfil
+    const existingProfile = await this.prisma.userProfile.findUnique({
+      where: { userId },
+    });
+
+    if (existingProfile) {
+      // Podrías lanzar un error o simplemente actualizarlo
+      // Por ahora, lanzaremos un error para indicar que ya se completó
+      throw new ConflictException('El perfil inicial ya ha sido completado.');
+    }
+
+    // Crea el nuevo perfil asociado al usuario
+    const newProfile = await this.prisma.userProfile.create({
+      data: {
+        institucion,
+        cargo,
+        plazoEntregaActa,
+        userId: userId, // Conecta directamente con el ID del usuario
+      },
+    });
+
+    return newProfile;
   }
 }
