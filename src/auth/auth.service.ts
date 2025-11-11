@@ -327,11 +327,7 @@ export class AuthService {
     );
 
     try {
-      await this.emailService.sendPasswordResetOtp(
-        user.email,
-        otp,
-        user.nombre,
-      );
+      await this.emailService.sendPasswordResetOtp(user.email, otp);
       console.log(`[forgotPassword] Email con OTP enviado a ${email}.`);
     } catch (emailError) {
       console.error(

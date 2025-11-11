@@ -223,16 +223,21 @@ export class ActaComplianceController {
     const { buffer, reporte } =
       await this.actaComplianceService.generatePdfBuffer(id, user.id);
 
-    const subject = `Reporte de Compliance: ${reporte.nombre_organo_entidad || 'Auditoría'}`;
-    const fileName = `reporte-${reporte.codigo_documento_revisado || reporte.id}.pdf`;
+    // El subject se construye en el servicio de email a partir del fileName.
+    const fileName = `reporte-${
+      reporte.codigo_documento_revisado || reporte.id
+    }.pdf`;
+    const reportDate = new Date(
+      reporte.fecha_revision || Date.now(),
+    ).toLocaleDateString('es-ES');
 
-    // 2. Llama al servicio de Email (que actualizaremos)
+    // 2. Llama al servicio de Email con los argumentos en el orden correcto
     await this.emailService.sendReportWithAttachment(
-      user.email, // Envía al usuario autenticado
-      user.nombre,
-      subject,
-      buffer,
-      fileName,
+      user.email, // to: string
+      buffer, // reportBuffer: Buffer
+      fileName, // fileName: string
+      user.nombre, // userName: string
+      reportDate, // reportDate: string
     );
 
     let message = `Reporte enviado exitosamente a ${user.email}`;
@@ -243,11 +248,11 @@ export class ActaComplianceController {
       reporte.correo_electronico !== user.email
     ) {
       await this.emailService.sendReportWithAttachment(
-        reporte.correo_electronico,
-        reporte.nombre_completo_revisor || 'Destinatario',
-        subject,
-        buffer,
-        fileName,
+        reporte.correo_electronico, // to: string
+        buffer, // reportBuffer: Buffer
+        fileName, // fileName: string
+        reporte.nombre_completo_revisor || 'Destinatario', // userName: string
+        reportDate, // reportDate: string
       );
       message += ` y a ${reporte.correo_electronico}`;
     }

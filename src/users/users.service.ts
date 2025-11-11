@@ -12,6 +12,15 @@ import * as bcrypt from 'bcrypt';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
+  async findOneById(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        profile: true,
+      },
+    });
+  }
+
   async update(id: string, updateUserDto: UpdateUserDto) {
     // Llama a Prisma para actualizar el usuario en la base de datos
     const updatedUser = await this.prisma.user.update({

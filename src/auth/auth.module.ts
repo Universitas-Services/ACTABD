@@ -8,9 +8,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { RefreshTokenStrategy } from './strategies/refresh-token.strategy'; // Importa la nueva estrategia
+import { EmailModule } from '../email/email.module'; // Importa EmailModule
 
 @Module({
   imports: [
+    EmailModule, // Añade EmailModule a los imports
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
