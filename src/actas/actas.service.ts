@@ -1,121 +1,165 @@
 // src/actas/actas.service.ts
 
 import {
+  ForbiddenException,
   Injectable,
-  NotFoundException, // <-- Añadir
-  ForbiddenException, // <-- Añadir
+  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateActaDto } from '../auth/dto/create-acta.dto';
-import { UpdateActaDto } from '../auth/dto/update-acta.dto'; // <-- Importar DTO
-import { User } from '@prisma/client';
+import { UpdateActaDto } from '../auth/dto/update-acta.dto';
+import { User, Acta, ActaStatus, Prisma } from '@prisma/client'; // <-- Importa Prisma
+import { ActaDocxService } from './acta-docx.service';
 
 @Injectable()
 export class ActasService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly actaDocxService: ActaDocxService,
+  ) {}
 
-  // ... (Tu método create() existente va aquí) ...
+  /**
+   * CORRECCIÓN DE ERRORES (Línea 19 y 29):
+   * - Eliminamos 'ciudad' y 'estado' de la desestructuración.
+   * - Eliminamos 'ciudad' y 'estado' de la llamada a la base de datos.
+   * - Añadimos la lógica de 'metadataCompleto' que copia los campos.
+   */
   async create(createActaDto: CreateActaDto, user: User) {
-    const { type, nombreEntidad, ciudad, estado, metadata } = createActaDto;
+    // 1. Extraemos SOLO los campos que existen en el DTO
+    const { type, nombreEntidad, metadata } = createActaDto;
 
-    // Lógica para generar un número de acta único (puedes mejorarla según tus necesidades)
-    const numeroActa = `${type}-${Date.now()}`;
+    // 2. Generamos el número de acta
+    const numeroActa = await this.generarNumeroActa();
 
+    // 3. Creamos el metadata completo (copiando los campos de nivel superior)
+    const metadataCompleto = {
+      ...metadata,
+      nombreEntidad: nombreEntidad,
+      nombreOrgano: nombreEntidad, // Como discutimos, se duplica
+      numeroActa: numeroActa,
+      type: type,
+    };
+
+    // 4. Creamos el acta en la base de datos
     const nuevaActa = await this.prisma.acta.create({
       data: {
-        numeroActa,
-        type,
-        nombreEntidad,
-        ciudad,
-        estado,
-        fecha: new Date(), // Asignamos la fecha actual
-        metadata: metadata || {}, // Asignamos el objeto de metadata o un objeto vacío
-        // Conectamos el acta con el usuario que la está creando
-        user: {
-          connect: {
-            id: user.id,
-          },
-        },
+        numeroActa: numeroActa,
+        nombreEntidad: nombreEntidad,
+        type: type,
+        status: ActaStatus.GUARDADA, // Estatus por defecto
+        userId: user.id,
+        metadata: metadataCompleto,
+        // (Ya no hay error en la línea 29 porque no pasamos 'ciudad')
       },
     });
 
     return nuevaActa;
   }
 
+  // Función para generar el número de acta (ejemplo)
+  private async generarNumeroActa(): Promise<string> {
+    const count = await this.prisma.acta.count();
+    // Ajusta el prefijo si lo deseas
+    return `ACTA-${(count + 1).toString().padStart(4, '0')}`;
+  }
+
   /**
-   * Método privado para verificar que un acta existe y pertenece al usuario.
+   * CORRECCIÓN DE ERROR (Línea 79):
+   * - Cambiamos 'fecha' por 'createdAt' para ordenar.
+   * - Añadimos un 'select' para tu panel de administrativo.
    */
-  private async checkActaOwnership(id: string, user: User) {
+  async findAllForUser(user: User) {
+    return this.prisma.acta.findMany({
+      where: { userId: user.id },
+      orderBy: {
+        createdAt: 'desc', // <-- Arreglo del error de 'fecha'
+      },
+      select: {
+        id: true,
+        numeroActa: true,
+        nombreEntidad: true,
+        type: true,
+        status: true,
+        createdAt: true,
+      },
+    });
+  }
+
+  // Encuentra un acta y verifica que el usuario sea el dueño
+  async findOneForUser(id: string, user: User): Promise<Acta> {
     const acta = await this.prisma.acta.findUnique({
       where: { id },
     });
 
     if (!acta) {
-      throw new NotFoundException(`El acta con ID "${id}" no existe.`);
+      throw new NotFoundException('Acta no encontrada');
     }
-
-    // Comprobamos que el acta pertenezca al usuario que hace la petición
-    if (acta.userId !== user.id) {
-      throw new ForbiddenException(
-        'No tienes permiso para acceder a esta acta.',
-      );
-    }
-
+    this.checkActaOwnership(acta, user.id);
     return acta;
   }
 
-  // --- NUEVOS MÉTODOS CRUD ---
-
   /**
-   * CONSULTAR TODAS (Read All)
-   * Busca todas las actas que pertenecen al usuario autenticado.
-   */
-  async findAllForUser(user: User) {
-    return this.prisma.acta.findMany({
-      where: {
-        userId: user.id,
-      },
-      orderBy: {
-        fecha: 'desc', // Ordenar por fecha descendente
-      },
-    });
-  }
-
-  /**
-   * CONSULTAR UNA (Read One)
-   * Busca un acta específica por ID, asegurando que pertenezca al usuario.
-   */
-  async findOneForUser(id: string, user: User) {
-    // Usamos el helper para verificar propiedad y existencia
-    return this.checkActaOwnership(id, user);
-  }
-
-  /**
-   * ACTUALIZAR (Update)
-   * Actualiza un acta específica por ID, asegurando que pertenezca al usuario.
+   * Lógica de Actualización Corregida
    */
   async update(id: string, updateActaDto: UpdateActaDto, user: User) {
-    // Verifica que el acta exista y pertenezca al usuario antes de actualizar
-    await this.checkActaOwnership(id, user);
+    const currentActa = await this.findOneForUser(id, user); // Verifica propiedad
+
+    const { nombreEntidad, type, metadata } = updateActaDto;
+
+    // Inicia el objeto de datos para Prisma
+    const dataToUpdate: Prisma.ActaUpdateInput = {};
+
+    if (nombreEntidad) {
+      dataToUpdate.nombreEntidad = nombreEntidad;
+    }
+    if (type) {
+      dataToUpdate.type = type;
+    }
+
+    // Lógica para fusionar el metadata (si se actualiza)
+    if (metadata || nombreEntidad) {
+      const newMetadata = {
+        ...(currentActa.metadata as Record<string, any>), // Empieza con lo antiguo
+        ...(metadata || {}), // Fusiona los nuevos cambios de metadata
+      };
+
+      // Si 'nombreEntidad' cambió, actualízalo también dentro del metadata
+      if (nombreEntidad) {
+        newMetadata.nombreEntidad = nombreEntidad;
+        newMetadata.nombreOrgano = nombreEntidad;
+      }
+
+      dataToUpdate.metadata = newMetadata;
+    }
 
     return this.prisma.acta.update({
       where: { id },
-      data: updateActaDto,
+      data: dataToUpdate,
     });
   }
 
-  /**
-   * ELIMINAR (Delete)
-   * Elimina un acta específica por ID, asegurando que pertenezca al usuario.
-   */
+  // Elimina un acta
   async remove(id: string, user: User) {
-    // Verifica que el acta exista y pertenezca al usuario antes de eliminar
-    await this.checkActaOwnership(id, user);
-
-    await this.prisma.acta.delete({
+    await this.findOneForUser(id, user); // Verifica propiedad
+    return this.prisma.acta.delete({
       where: { id },
     });
+  }
 
-    return { message: `Acta con ID "${id}" eliminada exitosamente.` };
+  // Actualiza solo el estatus (usado por el controlador)
+  async updateStatus(actaId: string, status: ActaStatus) {
+    return this.prisma.acta.update({
+      where: { id: actaId },
+      data: { status: status },
+    });
+  }
+
+  // Helper para verificar propiedad
+  private checkActaOwnership(acta: Acta, userId: string) {
+    if (acta.userId !== userId) {
+      throw new ForbiddenException(
+        'No tienes permiso para acceder a esta acta',
+      );
+    }
   }
 }

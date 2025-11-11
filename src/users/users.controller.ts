@@ -61,8 +61,10 @@ export class UsersController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'No autorizado.',
   })
-  getProfile(@GetUser() user: User) {
-    return user;
+  async getProfile(@GetUser() user: User) {
+    // Llama al servicio para obtener el usuario con su perfil incluido
+    const userWithProfile = await this.usersService.findOneById(user.id);
+    return userWithProfile;
   }
 
   @Patch('profile')

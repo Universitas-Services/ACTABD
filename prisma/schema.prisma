@@ -51,24 +51,24 @@ model UserProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @unique // La llave foránea
 }
-
+enum ActaStatus {
+  GUARDADA
+  DESCARGADA
+  ENVIADA
+}
 model Acta {
-  id          String   @id @default(uuid())
-  numeroActa  String   @unique @map("numero_acta")
-  type        ActaType
-  nombreEntidad String @map("nombre_entidad")
-  ciudad      String
-  estado      String
-  fecha       DateTime
-  metadata    Json?    // Soporte nativo para JSON/JSONB
+  id            String       @id @default(uuid())
+  numeroActa    String?      @unique // Hecho opcional (?) para arreglar la migración
+  nombreEntidad String?      // Hecho opcional (?) para arreglar la migración
+  type          ActaType
+  status        ActaStatus   @default(GUARDADA)
+  metadata      Json
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @default(now()) @updatedAt // Añadido @default(now())
 
-  // Relación muchos a uno con el usuario
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  createdAt DateTime @default(now()) @map("created_at")
   
-  // La relación inversa 'complianceCheck' ha sido ELIMINADA de aquí
 }
 
 model ChatHistory {
