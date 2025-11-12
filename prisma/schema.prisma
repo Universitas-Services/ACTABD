@@ -36,6 +36,7 @@ model User {
 
   // Relaciones
   profile     UserProfile? 
+  profileCompleted Boolean @default(false)
   actas       Acta[]        // Actas generadas POR este usuario
   chatHistory ChatHistory[] // Un usuario puede tener muchos historiales de chat
   complianceChecks ActaCompliance[] // <-- AÑADIDO: Revisiones de cumplimiento hechas por este usuario
