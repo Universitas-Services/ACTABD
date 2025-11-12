@@ -208,4 +208,24 @@ export class ActaDocxService {
     }
 
     // PASO 3: Reemplazo final
-    for (.
+    for (const key in processedData) {
+      const placeholder = new RegExp(`{{${key}}}`, 'g');
+      const value = processedData[key];
+
+      let stringValue = ''; // Valor por defecto
+      if (
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
+        stringValue = String(value);
+      }
+      htmlContent = htmlContent.replace(placeholder, stringValue);
+    }
+
+    // PASO 4: Limpieza final
+    htmlContent = htmlContent.replace(/{{[^}]+}}/g, '');
+
+    return htmlContent;
+  }
+}
