@@ -435,24 +435,24 @@ export class ActaComplianceService {
             <tbody>
     `;
 
-    // Iterar sobre las 98 preguntas del DTO
-    DB_KEYS_MAP.forEach((item, index) => {
-      const dtoKey = item as keyof CreateActaComplianceDto;
+    // Iterar sobre todas las preguntas del DTO
+    DB_KEYS_MAP.forEach((dtoKey, index) => {
       const findingInfo = FINDINGS_MAP[dtoKey];
-
-      if (!findingInfo) return; // Si no hay info en el mapa, saltar
-
+      const pregunta = findingInfo
+        ? findingInfo.pregunta
+        : 'Pregunta no encontrada';
       const cumple = createDto[dtoKey] === true;
 
       const cumpleText = cumple ? 'SI' : 'NO';
       const cumpleClass = cumple ? 'cumple-si' : 'cumple-no';
-      const condicion = !cumple ? findingInfo.condicion : ''; // Rellena si es NO
-      const criterio = !cumple ? findingInfo.criterio : ''; // Rellena si es NO
+      // Solo mostrar condición y criterio si la respuesta es NO
+      const condicion = !cumple && findingInfo ? findingInfo.condicion : '';
+      const criterio = !cumple && findingInfo ? findingInfo.criterio : '';
 
       html += `
               <tr>
                 <td class="col-numero">${index + 1}</td>
-                <td class="col-busqueda">${findingInfo.pregunta}</td>
+                <td class="col-busqueda">${pregunta}</td>
                 <td class="${cumpleClass}">${cumpleText}</td>
                 <td class="col-condicion">${condicion}</td>
                 <td class="col-criterio">${criterio}</td>
