@@ -1,444 +1,477 @@
 // src/acta-compliance/acta-compliance.service.ts
 
 import {
-  Injectable,
-  NotFoundException,
   ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Prisma, User } from '@prisma/client';
+import * as puppeteer from 'puppeteer';
+import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
+// Importa los DTOs
 import { CreateActaComplianceDto } from './dto/create-acta-compliance.dto';
 import { UpdateActaComplianceDto } from './dto/update-acta-compliance.dto';
-import { ActaCompliance } from '@prisma/client';
-
-// Importaciones de tipos
-import * as puppeteer from 'puppeteer';
-
-import { FINDINGS_MAP, DB_KEYS_MAP } from './acta-compliance.constants';
+// Importa las constantes que usará la nueva función de HTML
+import { DB_KEYS_MAP, FINDINGS_MAP } from './acta-compliance.constants';
 
 @Injectable()
 export class ActaComplianceService {
-  // El constructor ahora SOLO inyecta dependencias de NestJS
-  constructor(private prisma: PrismaService) {
-    // ¡IMPORTANTE! El constructor está vacío de lógica de pdfmake.
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService,
+  ) {}
 
   /**
-   * Crea un nuevo registro de checklist de cumplimiento.
+   * Crea un nuevo registro de cumplimiento (checklist)
    */
-  async create(
-    createActaComplianceDto: CreateActaComplianceDto,
-    userId: string,
-  ): Promise<ActaCompliance> {
-    const puntajeCalculado = this.calculateScore(createActaComplianceDto);
-    const resumenCumplimiento = this.generateSummary(
-      puntajeCalculado,
-      createActaComplianceDto,
-    );
+  async create(createActaComplianceDto: CreateActaComplianceDto, user: User) {
+    const userId = user.id;
+
+    // Calcula el puntaje y resumen
+    const puntaje = this.calculateScore(createActaComplianceDto);
+    const resumen = this.generateSummary(puntaje);
 
     try {
       const newCompliance = await this.prisma.actaCompliance.create({
         data: {
           ...createActaComplianceDto,
-          puntajeCalculado,
-          resumenCumplimiento,
+          puntajeCalculado: puntaje,
+          resumenCumplimiento: resumen,
           userId: userId,
         },
       });
       return newCompliance;
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Error desconocido';
-      throw new Error(
-        `Error al crear el registro de cumplimiento: ${errorMessage}`,
+    } catch (error) {
+      console.error('Error al crear el registro de compliance:', error);
+      throw new InternalServerErrorException(
+        'No se pudo crear el registro de cumplimiento.',
       );
     }
   }
 
-  /**ls
-   *
-   * Obtiene todos los checklists de cumplimiento (general).
+  /**
+   * Obtiene todos los checklists del usuario logueado
    */
-  async findAll(): Promise<ActaCompliance[]> {
+  async findAllForUser(user: User) {
     return this.prisma.actaCompliance.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { user: { select: { id: true, email: true, nombre: true } } },
+      where: { userId: user.id },
     });
   }
 
   /**
-   * Obtiene todos los checklists de cumplimiento CREADOS POR un usuario específico.
+   * Obtiene un checklist específico, verificando propiedad
    */
-  async findAllForUser(userId: string): Promise<ActaCompliance[]> {
-    return this.prisma.actaCompliance.findMany({
-      where: { userId: userId },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  /**
-   * Obtiene un checklist específico por su ID, VERIFICANDO PROPIEDAD.
-   */
-  async findOneForUser(id: string, userId: string): Promise<ActaCompliance> {
+  async findOneForUser(id: string, user: User) {
     const compliance = await this.prisma.actaCompliance.findUnique({
       where: { id },
     });
+
     if (!compliance) {
-      throw new NotFoundException(
-        `Checklist de cumplimiento con ID ${id} no encontrado.`,
-      );
+      throw new NotFoundException('Registro de cumplimiento no encontrado.');
     }
-    if (compliance.userId !== userId) {
-      throw new ForbiddenException(
-        'No tienes permiso para acceder a este registro.',
-      );
-    }
+
+    this.checkOwnership(compliance, user.id);
     return compliance;
   }
 
   /**
-   * Actualiza un checklist de cumplimiento, VERIFICANDO PROPIEDAD.
+   * Actualiza un checklist, recalculando el puntaje
    */
   async update(
     id: string,
     updateActaComplianceDto: UpdateActaComplianceDto,
-    userId: string,
-  ): Promise<ActaCompliance> {
-    const existingData = await this.findOneForUser(id, userId);
-    const newData = { ...existingData, ...updateActaComplianceDto };
+    user: User,
+  ) {
+    // Primero, asegura que el usuario sea el dueño
+    const currentCompliance = await this.findOneForUser(id, user);
 
-    const puntajeCalculado = this.calculateScore(newData);
-    const resumenCumplimiento = this.generateSummary(puntajeCalculado, newData);
+    // Recalcula el puntaje y resumen si los datos de preguntas cambiaron
+    const dataToUpdate: Prisma.ActaComplianceUpdateInput = {
+      ...updateActaComplianceDto,
+    };
 
-    const updatedCompliance = await this.prisma.actaCompliance.update({
+    // Crea un DTO temporal para recalcular (fusionando datos antiguos y nuevos)
+    const dtoForCalculation = {
+      ...currentCompliance,
+      ...updateActaComplianceDto,
+    } as CreateActaComplianceDto;
+
+    const puntaje = this.calculateScore(dtoForCalculation);
+    const resumen = this.generateSummary(puntaje);
+    dataToUpdate.puntajeCalculado = puntaje;
+    dataToUpdate.resumenCumplimiento = resumen;
+
+    return this.prisma.actaCompliance.update({
       where: { id },
-      data: {
-        ...updateActaComplianceDto,
-        puntajeCalculado,
-        resumenCumplimiento,
-      },
+      data: dataToUpdate,
     });
-    return updatedCompliance;
   }
 
   /**
-   * Elimina un checklist de cumplimiento, VERIFICANDO PROPIEDAD.
+   * Elimina un checklist
    */
-  async remove(id: string, userId: string): Promise<ActaCompliance> {
-    await this.findOneForUser(id, userId);
-    return await this.prisma.actaCompliance.delete({ where: { id } });
+  async remove(id: string, user: User) {
+    await this.findOneForUser(id, user); // Verifica propiedad
+    return this.prisma.actaCompliance.delete({ where: { id } });
   }
 
-  // --- ÚNICA IMPLEMENTACIÓN DEL MÉTODO PARA GENERAR PDF ---
-  /**
-   * Genera el buffer del PDF para un reporte específico.
-   */
-  async generatePdfBuffer(
-    reporteId: string,
-    userId: string,
-  ): Promise<{ buffer: Buffer; reporte: ActaCompliance }> {
-    const reporte = await this.findOneForUser(reporteId, userId);
-
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
-
-    const htmlContent = this.generateHtmlContent(reporte);
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: { top: '40px', right: '40px', bottom: '60px', left: '40px' },
-    });
-
-    await browser.close();
-
-    return { buffer: pdfBuffer as Buffer, reporte };
-  }
+  // --- GENERACIÓN DE PDF ---
 
   /**
-   * Construye el contenido HTML para Puppeteer a partir de los datos del reporte.
+   * Genera el buffer del PDF para un checklist específico
    */
-  private generateHtmlContent(reporte: ActaCompliance): string {
-    let html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Reporte de Acta de Cumplimiento</title>
-            <style>
-                body { font-family: 'Roboto', sans-serif; margin: 0; padding: 0; }
-                .header { font-size: 16px; font-weight: bold; text-align: center; margin-top: 30px; }
-                .header-info { font-size: 9px; margin: 10px 0 20px 0; display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 5px; }
-                .header-info b { font-weight: bold; }
-                table { width: 100%; border-collapse: collapse; margin: 5px 0 15px 0; }
-                th, td { border: 1px solid #ddd; padding: 8px; text-align: center; font-size: 8px; }
-                th { background-color: #EEEEEE; font-weight: bold; }
-                .cell-left { text-align: left; }
-                .cell-highlight { font-size: 7px; text-align: left; color: red; }
-                .subheader { font-size: 14px; font-weight: bold; margin: 15px 0 10px 0; page-break-before: always; }
-                .subtitle { font-size: 12px; font-weight: bold; margin: 10px 0 5px 0; }
-                .body-text { font-size: 10px; text-align: justify; }
-                .observacion-item { font-size: 9px; margin-bottom: 10px; text-align: justify; }
-            </style>
-        </head>
-        <body>
-            <div class="header">REGISTRO DE HALLAZGOS U OBSERVACIONES - ACTA DE ENTREGA</div>
-            <div class="header-info">
-                <b>ENTE U ORGANISMO:</b><span>${reporte.nombre_organo_entidad || 'N/A'}</span>
-                <b>UNIDAD REVISORA:</b><span>${reporte.nombre_unidad_revisora || 'N/A'}</span>
-                <b>CÓDIGO:</b><span>${reporte.codigo_documento_revisado || 'N/A'}</span>
-                <b>ELABORADO POR:</b><span>${reporte.nombre_completo_revisor || 'N/A'}</span>
-                <b>FECHA:</b><span>${reporte.fecha_revision ? new Date(reporte.fecha_revision).toLocaleDateString() : 'N/A'}</span>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Nº</th>
-                        <th>BÚSQUEDA</th>
-                        <th>CUMPLE</th>
-                        <th>CONDICIÓN</th>
-                        <th>CRITERIO</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
+  async generatePdfBuffer(id: string, user: User): Promise<Buffer> {
+    const complianceData = await this.findOneForUser(id, user);
 
-    const observacionesHtml: string[] = [];
+    // Genera el contenido HTML
+    const htmlContent = this.generateHtmlContent(
+      complianceData as unknown as CreateActaComplianceDto,
+      complianceData.puntajeCalculado ?? 0,
+      complianceData.resumenCumplimiento ?? '',
+    );
 
-    DB_KEYS_MAP.forEach((dbKey, index) => {
-      const i = index + 1;
-      // @ts-expect-error - Accediendo dinámicamente
-      const answer: boolean | null | undefined = reporte[dbKey];
-      const answerText = this.mapBooleanToAnswer(answer);
-      const findingData =
-        FINDINGS_MAP[dbKey as keyof typeof FINDINGS_MAP] || {}; // Provide a default empty object if not found
+    let browser: puppeteer.Browser | undefined;
+    try {
+      // Configuración de Puppeteer
+      browser = await puppeteer.launch({
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+        ],
+        headless: true,
+      });
 
-      let condicionCell = '';
-      let criterioCell = '';
+      const page: puppeteer.Page = await browser.newPage();
+      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-      if (answer === false) {
-        condicionCell = `<td class="cell-highlight">${findingData.condicion}</td>`;
-        criterioCell = `<td class="cell-highlight">${findingData.criterio}</td>`;
-        observacionesHtml.push(
-          `<div class="observacion-item">${findingData.observacionHtml}</div>`,
-        );
-      } else {
-        condicionCell = `<td></td>`;
-        criterioCell = `<td></td>`;
+      const pdfBuffer: Buffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
+      });
+
+      return pdfBuffer;
+    } catch (error) {
+      console.error('Error al generar el PDF con Puppeteer:', error);
+      throw new InternalServerErrorException(
+        'No se pudo generar el reporte PDF.',
+      );
+    } finally {
+      if (browser) {
+        await browser.close();
       }
-
-      html += `
-            <tr>
-                <td>${i}</td>
-                <td class="cell-left">${findingData.pregunta}</td>
-                <td>${answerText}</td>
-                ${condicionCell}
-                ${criterioCell}
-            </tr>
-        `;
-    });
-
-    html += `
-                </tbody>
-            </table>
-
-            <div class="subheader">RESUMEN EJECUTIVO A REVISIÓN ACTA DE ENTREGA</div>
-            <div class="subtitle">ALCANCE</div>
-            <p class="body-text">Se ha realizado una revisión exhaustiva del Acta de Entrega y sus documentos anexos, con el propósito de identificar posibles incumplimientos de las normas establecidas por la Contraloría General de la República para Regular la Entrega de los Órganos y Entidades de la Administración Pública y de sus Respectivas Oficinas o Dependencias (Resolución N° 01-00-000162 de fecha 28 de julio de 2009).<br>Es importante destacar que esta revisión no constituye una auditoría de control fiscal, sino que se enmarca como un mecanismo de control interno.<br>Su objetivo es advertir sobre los riesgos legais asociados al levantamiento del Acta de Entrega y proponer acciones correctivas que permitan prevenir responsabilidades civiles, penales o administrativas para los funcionarios involucrados.</p>
-            
-            <div class="subtitle">HALLAZGOS</div>
-            <p class="body-text">${reporte.resumenCumplimiento || 'No se generó resumen.'}</p>
-
-            <div class="subtitle">IMPLICACIONES DEL INCUMPLIMIENTO DE LAS NORMAS DE ENTREGA</div>
-            <p class="body-text">El incumplimiento de las normas de entrega conlleva serias implicaciones tanto para los funcionarios involucrados como para el patrimonio público. Entre las principales consecuencias se encuentran: Responsabilidad Administrativa, Riesgo de Pérdida o DeteriorO del Patrimonio Público, Acciones Correctivas, Investigaciones y Procedimientos Administrativos, y Sanciones Legales.</p>
-
-            <div class="subtitle">NIVEL DE RIESGO POR HALLAZGOS RESULTANTES</div>
-            <p class="body-text">Este es el texto que corresponde a {{TEXTO}} en tu plantilla. Deberías guardarlo en tu BD o definirlo aquí.</p>
-
-            <div class="subtitle">SOLUCIÓN Y LLAMADO A LA ACCIÓN</div>
-            <ul class="body-text">
-                <li>Concertar una reunión, ya sea presencial o virtual, con el equipo de Universitas Legal...</li>
-                <li>Revisar el “Reporte de Hallazgos” con su Equipo de Trabajo...</li>
-                <li>Revisar y reforzar la capacitación de su equipo de trabajo...</li>
-                <li>Formalizar las observaciones, para ello, pueden Imprimir, suscribir y presentar la observación...</li>
-            </ul>
-            
-            <div class="subheader">OBSERVACIONES AL ACTA DE ENTREGA (ANEXO)</div>
-            ${observacionesHtml.length > 0 ? observacionesHtml.join('') : '<p class="body-text">No se encontraron hallazgos.</p>'}
-        </body>
-        </html>
-    `;
-    return html;
+    }
   }
 
-  // --- El resto de tus métodos de cálculo (sin cambios) ---
-  private mapBooleanToAnswer(value: boolean | null | undefined): string {
-    if (value === true) return 'SI';
-    if (value === false) return 'NO';
-    return 'NO aplica';
+  /**
+   * Envía el PDF generado por correo electrónico
+   */
+  async sendPdfByEmail(id: string, user: User) {
+    try {
+      const pdfBuffer = await this.generatePdfBuffer(id, user);
+      const complianceData = await this.findOneForUser(id, user);
+
+      const fileName = `Reporte_Compliance_${
+        complianceData.nombre_organo_entidad
+      }_${new Date(
+        complianceData.fecha_revision || Date.now(),
+      ).toLocaleDateString('es-VE')}.pdf`;
+      const reportDate = new Date(
+        complianceData.fecha_revision || Date.now(),
+      ).toLocaleDateString('es-VE');
+
+      await this.emailService.sendReportWithAttachment(
+        user.email,
+        pdfBuffer,
+        fileName,
+        user.nombre,
+        reportDate,
+      );
+
+      return {
+        message: 'Reporte enviado exitosamente a tu correo electrónico.',
+      };
+    } catch (error) {
+      console.error('Error al enviar el PDF por correo:', error);
+      throw new InternalServerErrorException(
+        'No se pudo enviar el reporte por correo.',
+      );
+    }
   }
 
-  private getPonderaciones(): { [key: string]: number } {
+  // --- LÓGICA DE NEGOCIO ---
+
+  /**
+   * Helper para verificar propiedad del registro
+   */
+  private checkOwnership(
+    compliance: { userId: string } | null,
+    userId: string,
+  ) {
+    if (!compliance) {
+      throw new NotFoundException('Registro no encontrado');
+    }
+    if (compliance.userId !== userId) {
+      throw new ForbiddenException(
+        'No tienes permiso para acceder a este registro',
+      );
+    }
+  }
+
+  // --- LÓGICA DE CÁLCULO ---
+
+  private getPonderaciones(): Record<keyof CreateActaComplianceDto, number> {
     return {
-      q1: 1,
-      q2: 1,
-      q3: 1,
-      q4: 1,
-      q5: 1,
-      q6: 1,
-      q7: 1,
-      q8: 1,
-      q9: 1,
-      q10: 2,
-      q11: 2,
-      q12: 2,
-      q13: 1,
-      q14: 2,
-      q15: 2,
-      q16: 2,
-      q17: 1,
-      q18: 1,
-      q19: 1,
-      q20: 1,
-      q21: 0,
-      q22: 1,
-      q23: 2,
-      q24: 0,
-      q25: 2,
-      q26: 2,
-      q27: 2,
-      q28: 1,
-      q29: 1.3,
-      q30: 1.31,
-      q31: 1.32,
-      q32: 1.33,
-      q33: 1.34,
-      q34: 1.35,
-      q35: 1.36,
-      q36: 1.37,
-      q37: 1.38,
-      q38: 1.39,
-      q39: 1.4,
-      q40: 1.41,
-      q41: 1.42,
-      q42: 1.43,
-      q43: 1.44,
-      q44: 1.45,
-      q45: 1.46,
-      q46: 1.47,
-      q47: 1.48,
-      q48: 1.49,
-      q49: 1.5,
-      q50: 1.51,
-      q51: 1.52,
-      q52: 1.53,
-      q53: 1.54,
-      q54: 1.55,
-      q55: 1.56,
-      q56: 1.57,
-      q57: 1.58,
-      q58: 1.59,
-      q59: 1.6,
-      q60: 1.61,
-      q61: 1.62,
-      q62: 1.63,
-      q63: 1.64,
-      q64: 1.65,
-      q65: 1.66,
-      q66: 1.67,
-      q67: 1.68,
-      q68: 1.69,
-      q69: 1.7,
-      q70: 1.71,
-      q71: 1.72,
-      q72: 1.73,
-      q73: 1.74,
-      q74: 1.75,
-      q75: 1.76,
-      q76: 0,
-      q77: 0,
-      q78: 0,
-      q79: 0,
-      q80: 0,
-      q81: 0,
-      q82: 0,
-      q83: 0,
-      q84: 0,
-      q85: 0,
-      q86: 0,
-      q87: 0,
-      q88: 0,
-      q89: 0,
-      q90: 0,
-      q91: 0,
-      q92: 0,
-      q93: 0,
-      q94: 0,
-      q95: 0,
-      q96: 0,
-      q97: 0,
-      q98: 0,
+      correo_electronico: 0,
+      rif_organo_entidad: 0,
+      nombre_completo_revisor: 0,
+      denominacion_cargo: 0,
+      nombre_organo_entidad: 0,
+      nombre_unidad_revisora: 0,
+      fecha_revision: 0,
+      codigo_documento_revisado: 0,
+      q1_acta_contiene_lugar_suscripcion: 1,
+      q2_acta_contiene_fecha_suscripcion: 1,
+      q3_acta_identifica_organo_entregado: 1,
+      q4_acta_identifica_servidor_entrega: 1,
+      q5_acta_identifica_servidor_recibe: 1,
+      q6_acta_describe_motivo_entrega: 1,
+      q7_acta_describe_fundamento_legal: 1,
+      q8_acta_contiene_relacion_anexos_normas: 1,
+      q9_acta_expresa_integracion_anexos: 1,
+      q10_acta_suscrita_por_quien_entrega: 2,
+      q11_acta_suscrita_por_quien_recibe: 2,
+      q12_anexa_informacion_adicional: 2,
+      q13_anexos_con_fecha_corte_al_cese: 1,
+      q14_acta_deja_constancia_inexistencia_info: 2,
+      q15_acta_especifica_errores_omisiones: 2,
+      q16_acta_elaborada_original_y_3_copias: 2,
+      q17_incluye_autorizacion_certificar_copias: 1,
+      q18_original_archivado_despacho_autoridad: 1,
+      q19_copia_certificada_entregada_a_servidor_recibe: 1,
+      q20_copia_certificada_entregada_a_servidor_entrega: 1,
+      q21_copia_entregada_auditoria_interna_en_plazo: 0,
+      q22_anexo_estado_cuentas_general: 1,
+      q23_anexo_situacion_presupuestaria_detallada: 2,
+      q24_anexo_gastos_comprometidos_no_causados: 0,
+      q25_anexo_gastos_causados_no_pagados: 2,
+      q26_anexo_estado_presupuestario_por_partidas: 2,
+      q27_anexo_estado_presupuestario_por_cuentas: 2,
+      q28_anexo_estados_financieros: 1,
+      q29_anexo_balance_comprobacion_y_notas: 1.3,
+      q30_anexo_estado_situacion_financiera_y_notas: 1.31,
+      q31_anexo_estado_rendimiento_financiero_y_notas: 1.32,
+      q32_anexo_estado_movimiento_patrimonio_y_notas: 1.33,
+      q33_anexo_relacion_cuentas_por_cobrar: 1.34,
+      q34_anexo_relacion_cuentas_por_pagar: 1.35,
+      q35_anexo_relacion_fondos_terceros: 1.36,
+      q36_anexo_situacion_fondos_anticipo: 1.37,
+      q37_anexo_situacion_caja_chica: 1.38,
+      q38_anexo_acta_arqueo_caja_chica: 1.39,
+      q39_anexo_listado_registro_proveedores: 1.4,
+      q40_anexo_reporte_libros_contables: 1.41,
+      q41_anexo_reporte_cuentas_bancarias: 1.42,
+      q42_anexo_reporte_conciliaciones_bancarias: 1.43,
+      q43_anexo_reporte_retenciones_pendientes: 1.44,
+      q44_anexo_reporte_contrataciones_publicas: 1.45,
+      q45_anexo_reporte_fideicomiso_prestaciones: 1.46,
+      q46_anexo_reporte_bonos_vacacionales: 1.47,
+      q47_anexo_mencion_numero_cargos_rrhh: 1.48,
+      q48_incluye_cuadro_resumen_cargos: 1.49,
+      q49_cuadro_resumen_cargos_validado_rrhh: 1.5,
+      q50_anexo_reporte_nominas: 1.51,
+      q51_anexo_inventario_bienes: 1.52,
+      q52_inventario_bienes_fecha_entrega: 1.53,
+      q53_inventario_bienes_comprobado_fisicamente: 1.54,
+      q54_verificada_existencia_bienes_inventario: 1.55,
+      q55_verificada_condicion_bienes_inventario: 1.56,
+      q56_inventario_indica_responsable_patrimonial: 1.57,
+      q57_inventario_indica_responsable_uso: 1.58,
+      q58_inventario_indica_fecha_verificacion: 1.59,
+      q59_inventario_indica_numero_acta_verificacion: 1.6,
+      q60_inventario_indica_numero_registro_bien: 1.61,
+      q61_inventario_indica_codigo_bien: 1.62,
+      q62_inventario_indica_descripcion_bien: 1.63,
+      q63_inventario_indica_marca_bien: 1.64,
+      q64_inventario_indica_modelo_bien: 1.65,
+      q65_inventario_indica_serial_bien: 1.66,
+      q66_inventario_indica_estado_conservacion_bien: 1.67,
+      q67_inventario_indica_ubicacion_bien: 1.68,
+      q68_inventario_indica_valor_mercado_bien: 1.69,
+      q69_anexo_ejecucion_poa: 1.7,
+      q70_incluye_ejecucion_poa_fecha_entrega: 1.71,
+      q71_incluye_causas_incumplimiento_metas_poa: 1.72,
+      q72_incluye_plan_operativo_anual: 1.73,
+      q73_anexo_indice_general_archivo: 1.74,
+      q74_archivo_indica_clasificacion: 1.75,
+      q75_archivo_indica_ubicacion_fisica: 1.76,
+      q76_incluye_relacion_montos_fondos_asignados: 0,
+      q77_incluye_saldo_efectivo_fondos: 0,
+      q78_incluye_relacion_bienes_asignados: 0,
+      q79_incluye_relacion_bienes_unidad_bienes: 0,
+      q80_incluye_estados_bancarios_conciliados: 0,
+      q81_incluye_lista_comprobantes_gastos: 0,
+      q82_incluye_cheques_pendientes_cobro: 0,
+      q83_incluye_reporte_transferencias_bancarias: 0,
+      q84_anexo_caucion_funcionario_admin: 0,
+      q85_incluye_cuadro_liquidado_recaudado: 0,
+      q86_incluye_relacion_expedientes_investigacion: 0,
+      q87_incluye_situacion_tesoro_nacional: 0,
+      q88_incluye_ejecucion_presupuesto_nacional: 0,
+      q89_incluye_monto_deuda_publica_nacional: 0,
+      q90_incluye_situacion_cuentas_nacion: 0,
+      q91_incluye_situacion_tesoro_estadal: 0,
+      q92_incluye_ejecucion_presupuesto_estadal: 0,
+      q93_incluye_situacion_cuentas_estadal: 0,
+      q94_incluye_situacion_tesoro_municipal: 0,
+      q95_incluye_ejecucion_presupuesto_municipal: 0,
+      q96_incluye_situacion_cuentas_municipal: 0,
+      q97_incluye_inventario_terrenos_municipales: 0,
+      q98_incluye_relacion_ingresos_venta_terrenos: 0,
     };
   }
 
-  private calculateScore(data: Record<string, any>): number {
+  private calculateScore(dto: CreateActaComplianceDto): number {
     const ponderaciones = this.getPonderaciones();
-    let totalPonderacionAplicable = 0;
-    let obtainedScore = 0;
+    let totalPonderacion = 0;
+    let puntajeObtenido = 0;
 
-    for (let i = 1; i <= 98; i++) {
-      const dataKey = Object.keys(data).find((k) => k.startsWith(`q${i}_`));
-      const ponderacionKey = `q${i}`;
-      const ponderacion = ponderaciones[ponderacionKey];
+    for (const key of DB_KEYS_MAP) {
+      const typedKey = key as keyof CreateActaComplianceDto;
+      const ponderacion = ponderaciones[typedKey] || 0;
+      totalPonderacion += ponderacion;
 
-      if (dataKey && (data[dataKey] === true || data[dataKey] === false)) {
-        if (ponderacion) {
-          totalPonderacionAplicable += ponderacion;
-          if (data[dataKey] === true) {
-            obtainedScore += ponderacion;
-          }
-        }
+      if (dto[typedKey] === true) {
+        puntajeObtenido += ponderacion;
       }
     }
 
-    if (totalPonderacionAplicable === 0) {
-      return 100;
-    }
-
-    const scorePercentage = (obtainedScore / totalPonderacionAplicable) * 100;
-    return Math.round(scorePercentage);
+    if (totalPonderacion === 0) return 0;
+    return (puntajeObtenido / totalPonderacion) * 100;
   }
 
-  private generateSummary(score: number, data: Record<string, any>): string {
-    let algunaRespuesta = false;
-    for (let i = 1; i <= 98; i++) {
-      const dataKey = Object.keys(data).find((k) => k.startsWith(`q${i}_`));
-      if (dataKey && (data[dataKey] === true || data[dataKey] === false)) {
-        algunaRespuesta = true;
-        break;
-      }
-    }
+  private generateSummary(score: number): string {
+    if (score >= 90) return 'Nivel Alto o Crítico';
+    if (score >= 75) return 'Nivel Intermedio';
+    if (score >= 50) return 'Nivel Bajo';
+    return 'Nivel Muy Bajo';
+  }
 
-    if (!algunaRespuesta) {
-      return 'Tras revisar las respuestas obtenidas en el Formulario de Revisión de Cumplimiento para el Acta de Entrega, hemos identificado que los resultados indican Ausencia del documento objeto de la revisión; lamentamos informar que esta situación supone un incumplimiento general de la normativa y la imposibilidad de aplicar el resto del formato de evaluación.';
-    }
+  // ---
+  // --- NUEVA FUNCIÓN DE GENERACIÓN DE HTML ---
+  // ---
+  /**
+   * Genera el contenido HTML basado en la plantilla de reporte (CÓDIGO AUDITORIA)
+   *
+   */
+  private generateHtmlContent(
+    createDto: CreateActaComplianceDto,
+    puntaje: number,
+    resumen: string,
+  ): string {
+    let html = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #999; padding: 6px; text-align: left; font-size: 10px; word-wrap: break-word; }
+            th { background-color: #f0f0f0; font-weight: bold; }
+            .header-table { margin-bottom: 20px; }
+            .header-table td { font-weight: bold; background-color: #f9f9f9; }
+            .main-table th { background-color: #e0e0e0; text-align: center; }
+            .cumple-si { color: green; font-weight: bold; text-align: center; }
+            .cumple-no { color: red; font-weight: bold; text-align: center; }
+            .col-numero { width: 5%; text-align: center; }
+            .col-busqueda { width: 35%; }
+            .col-cumple { width: 8%; text-align: center; }
+            .col-condicion { width: 26%; }
+            .col-criterio { width: 26%; }
+            h2 { text-align: center; color: #000; }
+            h3 { margin-top: 25px; }
+          </style>
+        </head>
+        <body>
+          <h2>REGISTRO DE HALLAZGOS U OBSERVACIONES<br>ACTA DE ENTREGA</h2>
+          
+          <table class="header-table">
+            <tr>
+              <td>ENTE U ORGANISMO:</td>
+              <td>${createDto.nombre_organo_entidad || ''}</td>
+              <td>UNIDAD REVISORA:</td>
+              <td>${createDto.nombre_unidad_revisora || ''}</td>
+            </tr>
+            <tr>
+              <td>CÓDIGO:</td>
+              <td>${createDto.codigo_documento_revisado || ''}</td>
+              <td>ELABORADO POR:</td>
+              <td>${createDto.nombre_completo_revisor || ''}</td>
+            </tr>
+            <tr>
+              <td>REVISADO POR:</td>
+              <td>${createDto.nombre_completo_revisor || ''}</td>
+              <td>FECHA:</td>
+              <td>${new Date(
+                createDto.fecha_revision || Date.now(),
+              ).toLocaleDateString('es-VE')}</td>
+            </tr>
+          </table>
 
-    const textoBase =
-      'Tras revisar las respuestas obtenidas en el Formulario de Revisión de Cumplimiento para el Acta de Entrega, hemos identificado que los resultados reflejan incumplimientos con respecto a las normas establecidas por la Contraloría General de la República. Estas normas regulan la entrega de los órganos y entidades de la administración pública, así como de sus respectivas oficinas o dependencias, conforme a la Resolución N° 01-00-000162 del 28 de julio de 2009.';
-    const puntajeTexto = `con una puntuación de (${score}/100)`;
+          <table class="main-table">
+            <thead>
+              <tr>
+                <th class="col-numero">Nº</th>
+                <th class="col-busqueda">BÚSQUEDA</th>
+                <th class="col-cumple">CUMPLE</th>
+                <th class="col-condicion">CONDICIÓN</th>
+                <th class="col-criterio">CRITERIO</th>
+              </tr>
+            </thead>
+            <tbody>
+    `;
 
-    if (score >= 1 && score <= 50) {
-      return `${textoBase} Los incumplimientos han sido clasificados en un nivel Alto o Crítico, ${puntajeTexto}. Esta calificación indica la existencia de fallos significativos o sustanciales en la correcta aplicación de la normativa legal, lo que requiere atención inmediata para asegurar el cumplimiento de los estándares establecidos.`;
-    }
-    if (score >= 51 && score <= 75) {
-      return `${textoBase} Los incumplimientos han sido clasificados en un nivel Intermedio, ${puntajeTexto}. Esta calificación indica la existencia de fallos interpretativos o desconocimiento en la correcta aplicación de la normativa legal, lo que requiere atención inmediata para asegurar el cumplimiento de los estándares establecidos.`;
-    }
-    if (score >= 76 && score <= 99) {
-      return `${textoBase} Los incumplimientos han sido clasificados en un nivel Bajo o Leve, ${puntajeTexto}, Esta calificación indica la existencia de fallos por deficiencias o inexactitudes en la correcta aplicación de la normativa legal, lo que requiere atención inmediata para asegurar el cumplimiento de los estándares establecidos.`;
-    }
-    if (score === 100) {
-      return `Tras revisar las respuestas obtenidas en el Formulario de Revisión de Cumplimiento para el Acta de Entrega, los resultados indican un cumplimiento total con las normas establecidas por la Contraloría General de la República, conforme a la Resolución N° 01-00-000162 del 28 de julio de 2009. La puntuación obtenida es (${score}/100).`;
-    }
+    // Iterar sobre las 98 preguntas del DTO
+    DB_KEYS_MAP.forEach((item, index) => {
+      const dtoKey = item as keyof CreateActaComplianceDto;
+      const findingInfo = FINDINGS_MAP[dtoKey];
 
-    return 'Tras revisar las respuestas, se ha determinado un puntaje de 0, indicando incumplimiento total en los items evaluados.';
+      if (!findingInfo) return; // Si no hay info en el mapa, saltar
+
+      const cumple = createDto[dtoKey] === true;
+
+      const cumpleText = cumple ? 'SI' : 'NO';
+      const cumpleClass = cumple ? 'cumple-si' : 'cumple-no';
+      const condicion = !cumple ? findingInfo.condicion : ''; // Rellena si es NO
+      const criterio = !cumple ? findingInfo.criterio : ''; // Rellena si es NO
+
+      html += `
+              <tr>
+                <td class="col-numero">${index + 1}</td>
+                <td class="col-busqueda">${findingInfo.pregunta}</td>
+                <td class="${cumpleClass}">${cumpleText}</td>
+                <td class="col-condicion">${condicion}</td>
+                <td class="col-criterio">${criterio}</td>
+              </tr>
+      `;
+    });
+
+    html += `
+            </tbody>
+          </table>
+          
+          <h3 style="margin-top: 20px;">Resultados de la Auditoría</h3>
+          <p><strong>Puntaje Calculado:</strong> ${puntaje.toFixed(2)}%</p>
+          <p><strong>Resumen de Cumplimiento:</strong> ${resumen}</p>
+          
+        </body>
+      </html>
+    `;
+
+    return html;
   }
 }
