@@ -149,13 +149,13 @@ export class ActaComplianceService {
       const page: puppeteer.Page = await browser.newPage();
       await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-      const pdfBuffer: Buffer = await page.pdf({
+      const pdfBuffer = await page.pdf({
         format: 'A4',
         printBackground: true,
         margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' },
       });
 
-      return pdfBuffer;
+      return Buffer.from(pdfBuffer);
     } catch (error) {
       console.error('Error al generar el PDF con Puppeteer:', error);
       throw new InternalServerErrorException(
