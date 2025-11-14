@@ -374,12 +374,97 @@ export class ActaComplianceService {
     puntaje: number,
     resumen: string,
   ): string {
+    // --- Static Text Sections ---
+    const ejecutivoSummary = `
+      <div class="section">
+        <h3>RESUMEN EJECUTIVO A REVISIÓN ACTA DE ENTREGA</h3>
+        <p>Se ha realizado una revisión exhaustiva del Acta de Entrega y sus documentos anexos, con el propósito de identificar posibles incumplimientos de las normas establecidas por la Contraloría General de la República para Regular la Entrega de los Órganos y Entidades de la Administración Pública y de sus Respectivas Oficinas o Dependencias (Resolución N° 01-00-000162 de fecha 28 de julio de 2009). Es importante destacar que esta revisión no constituye una auditoría de control fiscal, sino que se enmarca como un mecanismo de control interno. Su objetivo es advertir sobre los riesgos legales asociados al levantamiento del Acta de Entrega y proponer acciones correctivas que permitan prevenir responsabilidades civiles, penales o administrativas para los funcionarios involucrados.</p>
+      </div>
+    `;
+
+    const alcanceSection = `
+      <div class="section">
+        <h3>ALCANCE</h3>
+        <p>Se ha realizado una revisión exhaustiva del Acta de Entrega y sus documentos anexos, con el propósito de identificar posibles incumplimientos de las normas establecidas por la Contraloría General de la República para Regular la Entrega de los Órganos y Entidades de la Administración Pública y de sus Respectivas Oficinas o Dependencias (Resolución N° 01-00-000162 de fecha 28 de julio de 2009). Es importante destacar que esta revisión no constituye una auditoría de control fiscal, sino que se enmarca como un mecanismo de control interno. Su objetivo es advertir sobre los riesgos legales asociados al levantamiento del Acta de Entrega y proponer acciones correctivas que permitan prevenir responsabilidades civiles, penales o administrativas para los funcionarios involucrados.</p>
+      </div>
+    `;
+
+    const implicacionesSection = `
+      <div class="section">
+        <h3>IMPLICACIONES DEL INCUMPLIMIENTO DE LAS NORMAS DE ENTREGA</h3>
+        <p>El incumplimiento de las normas de entrega conlleva serias implicaciones tanto para los funcionarios involucrados como para el patrimonio público. Entre las principales consecuencias se encuentran:</p>
+        <ul>
+          <li>Responsabilidad Administrativa: Los funcionarios que no cumplan con las normativas establecidas pueden enfrentarse a sanciones administrativas, lo que podría afectar su carrera y reputación profesional.</li>
+          <li>Riesgo de Pérdida o Deterioro del Patrimonio Público: La falta de adherencia a los procedimientos de entrega puede resultar en la pérdida, deterioro o menoscabo de los bienes y recursos públicos, comprometiendo así la integridad del patrimonio estatal.</li>
+          <li>Acciones Correctivas: Si se detectan actos o situaciones que amenacen el patrimonio de las entidades, el órgano de control fiscal competente deberá informar a las autoridades administrativas correspondientes para que se tomen las acciones correctivas pertinentes.</li>
+          <li>Investigaciones y Procedimientos Administrativos: En caso de que existan indicios suficientes de actos u omisiones que contravengan disposiciones legales o que causen daños al patrimonio público, se activará la potestad de investigación, de acuerdo con el Artículo 77 de la Ley Orgánica de la Contraloría General de la República. Esto puede dar lugar a un procedimiento administrativo para determinar responsabilidades, conforme a lo estipulado en el Capítulo IV del Título III de dicha Ley.</li>
+          <li>Sanciones Legales: Las contravenciones a las disposiciones establecidas en la Resolución serán sancionadas según lo previsto en la Ley Orgánica de la Contraloría General de la República y del Sistema Nacional de Control Fiscal, lo que puede incluir multas, inhabilitaciones y otras medidas disciplinarias.</li>
+        </ul>
+      </div>
+    `;
+
+    const solucionesSection = `
+      <div class="section">
+        <h3>SOLUCIÓN Y LLAMADO A LA ACCIÓN</h3>
+        <p>Para mitigar los riesgos y consecuencias identificadas, se recomienda implementar las siguientes acciones:</p>
+        <ul>
+          <li>Concertar una reunión, ya sea presencial o virtual, con el equipo de Universitas Legal para detallar el alcance de la revisión y discutir aspectos relevantes.</li>
+          <li>Revisar el “Reporte de Hallazgos” con su Equipo de Trabajo para que adviertan su situación actual y evalúen las acciones a tomar.</li>
+          <li>Revisar y reforzar la capacitación de su equipo de trabajo sobre las normas de entrega a través de la plataforma Universitas, asegurando que todos estén actualizados y alineados con los procedimientos establecidos.</li>
+          <li>Formalizar las observaciones, para ello, pueden Imprimir, suscribir y presentar la observación al Acta de Entrega ante el órgano de control fiscal competente (ver anexo)</li>
+        </ul>
+        <p>Estaremos encantados de explicarte las implicaciones de este diagnóstico y de colaborar en la elaboración de un plan de acciones correctivas que puedas implementar en tu organización. Además, te invitamos a seguirnos en nuestras redes sociales para que te mantengas informado sobre temas relevantes y actualizaciones en el ámbito de la gestión pública. Tu participación es fundamental para promover una gestión más eficiente y transparente.</p>
+      </div>
+    `;
+
+    // --- Dynamic Content Generation ---
+
+    let hallazgosListItems = '';
+    let observacionesListItems = '';
+
+    DB_KEYS_MAP.forEach((dtoKey) => {
+      const findingInfo = FINDINGS_MAP[dtoKey];
+      const pregunta = findingInfo
+        ? findingInfo.pregunta
+        : 'Pregunta no encontrada';
+      const cumple = createDto[dtoKey] === true;
+
+      if (!cumple) {
+        // For Hallazgos section
+        hallazgosListItems += `<li>${pregunta}</li>`;
+
+        // For Observaciones section
+        if (findingInfo && findingInfo.observacionHtml) {
+          // Replace <b> with <strong> and \n with <br> for better HTML rendering
+          const formattedObservacion = findingInfo.observacionHtml
+            .replace(/<b>/g, '<strong>')
+            .replace(/<\/b>/g, '</strong>')
+            .replace(/\n/g, '<br>');
+          observacionesListItems += `<li>${formattedObservacion}</li>`;
+        }
+      }
+    });
+
+    // Determine Risk Level
+    let nivelRiesgoText = 'Nivel Muy Bajo';
+    if (puntaje >= 90) nivelRiesgoText = 'Alto o Crítico';
+    else if (puntaje >= 75) nivelRiesgoText = 'Intermedio';
+    else if (puntaje >= 50) nivelRiesgoText = 'Bajo';
+
+    const nivelRiesgoSection = `
+      <div class="section">
+        <h3>NIVEL DE RIESGO POR HALLAZGOS RESULTANTES</h3>
+        <p><strong>Nivel de Riesgo:</strong> ${nivelRiesgoText}</p>
+      </div>
+    `;
+
+    // --- Assemble the full HTML ---
     let html = `
       <html>
         <head>
           <style>
             body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
-            table { width: 100%; border-collapse: collapse; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
             th, td { border: 1px solid #999; padding: 6px; text-align: left; font-size: 10px; word-wrap: break-word; }
             th { background-color: #f0f0f0; font-weight: bold; }
             .header-table { margin-bottom: 20px; }
@@ -392,8 +477,13 @@ export class ActaComplianceService {
             .col-cumple { width: 8%; text-align: center; }
             .col-condicion { width: 26%; }
             .col-criterio { width: 26%; }
-            h2 { text-align: center; color: #000; }
-            h3 { margin-top: 25px; }
+            h2 { text-align: center; color: #000; margin-bottom: 20px; }
+            h3 { margin-top: 25px; margin-bottom: 10px; color: #000; }
+            .section { margin-bottom: 20px; }
+            .section ul { margin-top: 5px; padding-left: 20px; }
+            .section li { margin-bottom: 5px; }
+            .score-summary { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; }
+            .footer-info { text-align: right; margin-top: 30px; }
           </style>
         </head>
         <body>
@@ -422,6 +512,9 @@ export class ActaComplianceService {
             </tr>
           </table>
 
+          ${ejecutivoSummary}
+          ${alcanceSection}
+
           <table class="main-table">
             <thead>
               <tr>
@@ -435,7 +528,7 @@ export class ActaComplianceService {
             <tbody>
     `;
 
-    // Iterar sobre todas las preguntas del DTO
+    // Iterar sobre todas las preguntas del DTO para la tabla principal
     DB_KEYS_MAP.forEach((dtoKey, index) => {
       const findingInfo = FINDINGS_MAP[dtoKey];
       const pregunta = findingInfo
@@ -464,10 +557,23 @@ export class ActaComplianceService {
             </tbody>
           </table>
           
-          <h3 style="margin-top: 20px;">Resultados de la Auditoría</h3>
-          <p><strong>Puntaje Calculado:</strong> ${puntaje.toFixed(2)}%</p>
-          <p><strong>Resumen de Cumplimiento:</strong> ${resumen}</p>
+          <div class="score-summary">
+            <h3>Resultados de la Auditoría</h3>
+            <p><strong>Puntaje Calculado:</strong> ${puntaje.toFixed(2)}%</p>
+            <p><strong>Resumen de Cumplimiento:</strong> ${resumen}</p>
+          </div>
+
+          ${hallazgosListItems ? `<div class="section"><h3>HALLAZGOS</h3><ul>${hallazgosListItems}</ul></div>` : ''}
+          ${implicacionesSection}
+          ${nivelRiesgoSection}
+          ${solucionesSection}
+          ${observacionesListItems ? `<div class="section"><h3>OBSERVACIONES AL ACTA DE ENTREGA (ANEXO)</h3><ul>${observacionesListItems}</ul></div>` : ''}
           
+          <div class="footer-info">
+            <p>Lugar y Fecha del Informe de Revisión<br>[Ciudad, Fecha]</p>
+            <p>Revisado por Equipo UNIVERSITAS LEGAL.</p>
+          </div>
+
         </body>
       </html>
     `;
