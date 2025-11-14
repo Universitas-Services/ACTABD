@@ -151,6 +151,15 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({ where: { email } });
     if (user && (await bcrypt.compare(pass, user.password))) {
       console.log(`[validateUser] Credenciales válidas para: ${email}`);
+      // Add check for email verification
+      if (!user.isEmailVerified) {
+        console.warn(
+          `[validateUser] Usuario ${email} no ha verificado su correo.`,
+        );
+        throw new UnauthorizedException(
+          'Por favor, confirma tu correo electrónico antes de iniciar sesión.',
+        );
+      }
       return JwtStrategy.excludePassword(user);
     }
     console.warn(`[validateUser] Credenciales inválidas para: ${email}`);

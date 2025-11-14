@@ -10,7 +10,7 @@ import {
   UseGuards,
   ParseUUIDPipe,
   HttpStatus,
-  Res, // <-- 2. IMPORTAR
+  Res,
 } from '@nestjs/common';
 import { ActaComplianceService } from './acta-compliance.service';
 import { CreateActaComplianceDto } from './dto/create-acta-compliance.dto';
@@ -25,9 +25,8 @@ import {
   ApiBearerAuth,
   ApiParam,
 } from '@nestjs/swagger';
-// --- 3. AÑADIR IMPORTS ---
-import { EmailService } from '../email/email.service'; // Para enviar correos
-import { Response } from 'express'; // Para la descarga de archivos
+import { EmailService } from '../email/email.service';
+import { Response } from 'express';
 
 @ApiTags('Acta Compliance')
 @ApiBearerAuth()
@@ -36,7 +35,6 @@ import { Response } from 'express'; // Para la descarga de archivos
 export class ActaComplianceController {
   constructor(
     private readonly actaComplianceService: ActaComplianceService,
-    // --- 4. INYECTAR EmailService ---
     private readonly emailService: EmailService,
   ) {}
 
@@ -52,27 +50,9 @@ export class ActaComplianceController {
   })
   create(
     @Body() createActaComplianceDto: CreateActaComplianceDto,
-    @GetUser() user: User, // Obtiene el usuario autenticado
+    @GetUser() user: User,
   ) {
-    // Pasa el ID del usuario al servicio
-    return this.actaComplianceService.create(createActaComplianceDto, user.id);
-  }
-
-  @Get()
-  @ApiOperation({
-    summary: 'Obtener todos los checklists (Admin - considera restringir)',
-  })
-  @ApiResponse({
-    status: HttpStatus.OK,
-    description: 'Lista de todos los checklists.',
-  })
-  @ApiResponse({
-    status: HttpStatus.UNAUTHORIZED,
-    description: 'No autorizado.',
-  })
-  findAll() {
-    // Advertencia: Esto devuelve TODOS los checklists.
-    return this.actaComplianceService.findAll();
+    return this.actaComplianceService.create(createActaComplianceDto, user);
   }
 
   @Get('my-checklists')
@@ -88,11 +68,9 @@ export class ActaComplianceController {
     description: 'No autorizado.',
   })
   findAllForUser(@GetUser() user: User) {
-    // Busca solo los checklists asociados al usuario autenticado
-    return this.actaComplianceService.findAllForUser(user.id);
+    return this.actaComplianceService.findAllForUser(user);
   }
 
-  // --- REVISADO: Añadir @GetUser para verificar propiedad ---
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un checklist de cumplimiento por su ID' })
   @ApiParam({
@@ -109,15 +87,10 @@ export class ActaComplianceController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'No autorizado.',
   })
-  async findOne(
-    @Param('id', ParseUUIDPipe) id: string,
-    @GetUser() user: User, // <-- AÑADIDO
-  ) {
-    // AHORA verificamos que el checklist pertenece al usuario
-    return this.actaComplianceService.findOneForUser(id, user.id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.actaComplianceService.findOneForUser(id, user);
   }
 
-  // --- REVISADO: Añadir @GetUser para verificar propiedad ---
   @Patch(':id')
   @ApiOperation({
     summary: 'Actualizar un checklist de cumplimiento por su ID',
@@ -139,17 +112,11 @@ export class ActaComplianceController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateActaComplianceDto: UpdateActaComplianceDto,
-    @GetUser() user: User, // <-- AÑADIDO
+    @GetUser() user: User,
   ) {
-    // AHORA verificamos que el usuario es dueño antes de actualizar
-    return this.actaComplianceService.update(
-      id,
-      updateActaComplianceDto,
-      user.id,
-    );
+    return this.actaComplianceService.update(id, updateActaComplianceDto, user);
   }
 
-  // --- REVISADO: Añadir @GetUser para verificar propiedad ---
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar un checklist de cumplimiento por su ID' })
   @ApiParam({
@@ -166,17 +133,9 @@ export class ActaComplianceController {
     status: HttpStatus.UNAUTHORIZED,
     description: 'No autorizado.',
   })
-  async remove(
-    @Param('id', ParseUUIDPipe) id: string,
-    @GetUser() user: User, // <-- AÑADIDO
-  ) {
-    // AHORA verificamos que el usuario es dueño antes de eliminar
-    return this.actaComplianceService.remove(id, user.id);
+  async remove(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
+    return this.actaComplianceService.remove(id, user);
   }
-
-  // ---
-  // --- 5. ENDPOINTS NUEVOS PARA PDF ---
-  // ---
 
   @Get(':id/download')
   @ApiOperation({ summary: 'Descargar el reporte en PDF' })
@@ -193,13 +152,17 @@ export class ActaComplianceController {
     @GetUser() user: User,
     @Res() res: Response,
   ) {
-    // Llama al nuevo método del servicio
-    const { buffer, reporte } =
-      await this.actaComplianceService.generatePdfBuffer(id, user.id);
+    const reporte = await this.actaComplianceService.findOneForUser(id, user);
+    if (!reporte) {
+      // This case should ideally not be reached if findOneForUser throws NotFoundException
+      return;
+    }
+    const buffer = await this.actaComplianceService.generatePdfBuffer(id, user);
 
-    const fileName = `reporte-compliance-${reporte.codigo_documento_revisado || reporte.id}.pdf`;
+    const fileName = `reporte-compliance-${
+      reporte.codigo_documento_revisado || reporte.id
+    }.pdf`;
 
-    // Configura la respuesta para forzar la descarga
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(buffer);
@@ -219,11 +182,13 @@ export class ActaComplianceController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
   ) {
-    // 1. Genera el PDF
-    const { buffer, reporte } =
-      await this.actaComplianceService.generatePdfBuffer(id, user.id);
+    const reporte = await this.actaComplianceService.findOneForUser(id, user);
+    if (!reporte) {
+      // This case should ideally not be reached if findOneForUser throws NotFoundException
+      return;
+    }
+    const buffer = await this.actaComplianceService.generatePdfBuffer(id, user);
 
-    // El subject se construye en el servicio de email a partir del fileName.
     const fileName = `reporte-${
       reporte.codigo_documento_revisado || reporte.id
     }.pdf`;
@@ -231,28 +196,26 @@ export class ActaComplianceController {
       reporte.fecha_revision || Date.now(),
     ).toLocaleDateString('es-ES');
 
-    // 2. Llama al servicio de Email con los argumentos en el orden correcto
     await this.emailService.sendReportWithAttachment(
-      user.email, // to: string
-      buffer, // reportBuffer: Buffer
-      fileName, // fileName: string
-      user.nombre, // userName: string
-      reportDate, // reportDate: string
+      user.email,
+      buffer,
+      fileName,
+      user.nombre,
+      reportDate,
     );
 
     let message = `Reporte enviado exitosamente a ${user.email}`;
 
-    // 3. Opcional: enviar al correo guardado en el reporte
     if (
       reporte.correo_electronico &&
       reporte.correo_electronico !== user.email
     ) {
       await this.emailService.sendReportWithAttachment(
-        reporte.correo_electronico, // to: string
-        buffer, // reportBuffer: Buffer
-        fileName, // fileName: string
-        reporte.nombre_completo_revisor || 'Destinatario', // userName: string
-        reportDate, // reportDate: string
+        reporte.correo_electronico,
+        buffer,
+        fileName,
+        reporte.nombre_completo_revisor || 'Destinatario',
+        reportDate,
       );
       message += ` y a ${reporte.correo_electronico}`;
     }
