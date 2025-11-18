@@ -14,6 +14,7 @@ export default tseslint.config(
       'dist/',
       'node_modules/',
       'src/actas/acta-docx.service.ts',
+      'src/email/email.service.ts',
     ],
   },
 

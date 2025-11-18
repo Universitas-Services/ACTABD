@@ -17,7 +17,7 @@ export class EmailService {
   // --- Tus funciones de email existentes ---
 
   async sendConfirmationEmail(to: string, token: string, name: string) {
-    const confirmationLink = `${this.configService.get<string>('FRONTEND_URL')}/confirm-email?token=${token}`;
+    const confirmationLink = `${this.configService.get<string>('FRONTEND_URL')}/verificar-email?token=${token}`;
 
     // (Tu lógica de leer la plantilla confirmation-email.html va aquí)
     // ...
