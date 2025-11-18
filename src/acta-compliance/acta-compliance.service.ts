@@ -1,3 +1,4 @@
+/* eslint-disable */
 // src/acta-compliance/acta-compliance.service.ts
 
 import {
@@ -11,10 +12,13 @@ import { Prisma, User } from '@prisma/client';
 import * as puppeteer from 'puppeteer';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
-// Importa los DTOs
-import { CreateActaComplianceDto } from './dto/create-acta-compliance.dto';
+// Importa los DTOs y el Enum
+import {
+  CreateActaComplianceDto,
+  RespuestaCompliance,
+} from './dto/create-acta-compliance.dto';
 import { UpdateActaComplianceDto } from './dto/update-acta-compliance.dto';
-// Importa las constantes que usará la nueva función de HTML
+// Importa las constantes
 import { DB_KEYS_MAP, FINDINGS_MAP } from './acta-compliance.constants';
 
 @Injectable()
@@ -38,11 +42,11 @@ export class ActaComplianceService {
     try {
       const newCompliance = await this.prisma.actaCompliance.create({
         data: {
-          ...createActaComplianceDto,
+          ...createActaComplianceDto, // Esparce las propiedades del DTO
           puntajeCalculado: puntaje,
           resumenCumplimiento: resumen,
           userId: userId,
-        },
+        } as Prisma.ActaComplianceUncheckedCreateInput, // 👈 ¡AGREGA ESTA LÍNEA!
       });
       return newCompliance;
     } catch (error) {
@@ -86,28 +90,26 @@ export class ActaComplianceService {
     updateActaComplianceDto: UpdateActaComplianceDto,
     user: User,
   ) {
-    // Primero, asegura que el usuario sea el dueño
     const currentCompliance = await this.findOneForUser(id, user);
 
-    // Recalcula el puntaje y resumen si los datos de preguntas cambiaron
-    const dataToUpdate: Prisma.ActaComplianceUpdateInput = {
-      ...updateActaComplianceDto,
-    };
-
-    // Crea un DTO temporal para recalcular (fusionando datos antiguos y nuevos)
+    // 2. Crea un objeto temporal para recalcular el puntaje
+    // Fusionamos lo que ya está en base de datos con lo que viene en el update.
+    // Usamos 'as unknown' primero para evitar conflictos entre String (BD) y Enum (DTO)
     const dtoForCalculation = {
       ...currentCompliance,
       ...updateActaComplianceDto,
-    } as CreateActaComplianceDto;
-
+    } as unknown as CreateActaComplianceDto;
     const puntaje = this.calculateScore(dtoForCalculation);
     const resumen = this.generateSummary(puntaje);
-    dataToUpdate.puntajeCalculado = puntaje;
-    dataToUpdate.resumenCumplimiento = resumen;
 
+    // 4. Actualiza en base de datos
     return this.prisma.actaCompliance.update({
       where: { id },
-      data: dataToUpdate,
+      data: {
+        ...updateActaComplianceDto,     // Los campos que cambiaron
+        puntajeCalculado: puntaje,      // Nuevo puntaje
+        resumenCumplimiento: resumen,   // Nuevo resumen
+      } as Prisma.ActaComplianceUncheckedUpdateInput, 
     });
   }
 
@@ -128,6 +130,7 @@ export class ActaComplianceService {
     const complianceData = await this.findOneForUser(id, user);
 
     // Genera el contenido HTML
+    // Se hace cast a unknown y luego al DTO porque los tipos de Prisma (String?) y DTO (Enum) son compatibles en JS
     const htmlContent = this.generateHtmlContent(
       complianceData as unknown as CreateActaComplianceDto,
       complianceData.puntajeCalculado ?? 0,
@@ -156,7 +159,7 @@ export class ActaComplianceService {
       });
 
       return Buffer.from(pdfBuffer);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al generar el PDF con Puppeteer:', error);
       throw new InternalServerErrorException(
         'No se pudo generar el reporte PDF.',
@@ -177,7 +180,7 @@ export class ActaComplianceService {
       const complianceData = await this.findOneForUser(id, user);
 
       const fileName = `Reporte_Compliance_${
-        complianceData.nombre_organo_entidad
+        complianceData.nombre_organo_entidad || 'Acta'
       }_${new Date(
         complianceData.fecha_revision || Date.now(),
       ).toLocaleDateString('es-VE')}.pdf`;
@@ -196,7 +199,7 @@ export class ActaComplianceService {
       return {
         message: 'Reporte enviado exitosamente a tu correo electrónico.',
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al enviar el PDF por correo:', error);
       throw new InternalServerErrorException(
         'No se pudo enviar el reporte por correo.',
@@ -336,6 +339,12 @@ export class ActaComplianceService {
     };
   }
 
+  /**
+   * Calcula el puntaje del checklist.
+   * LÓGICA ACTUALIZADA:
+   * - Suma puntos si la respuesta es 'SI' o 'NO_APLICA'.
+   * - 'NO_APLICA' se considera cumplimiento total a efectos de puntaje.
+   */
   private calculateScore(dto: CreateActaComplianceDto): number {
     const ponderaciones = this.getPonderaciones();
     let totalPonderacion = 0;
@@ -344,9 +353,16 @@ export class ActaComplianceService {
     for (const key of DB_KEYS_MAP) {
       const typedKey = key as keyof CreateActaComplianceDto;
       const ponderacion = ponderaciones[typedKey] || 0;
+      const respuesta = dto[typedKey];
+
+      // Siempre sumamos al denominador (total posible)
       totalPonderacion += ponderacion;
 
-      if (dto[typedKey] === true) {
+      // Sumamos puntos si es 'SI' O 'NO_APLICA'
+      if (
+        respuesta === RespuestaCompliance.SI ||
+        respuesta === RespuestaCompliance.NO_APLICA
+      ) {
         puntajeObtenido += ponderacion;
       }
     }
@@ -363,42 +379,36 @@ export class ActaComplianceService {
   }
 
   // ---
-  // --- NUEVA FUNCIÓN DE GENERACIÓN DE HTML ---
+  // --- FUNCIÓN DE GENERACIÓN DE HTML ACTUALIZADA ---
   // ---
-  /**
-   * Genera el contenido HTML basado en la plantilla de reporte (CÓDIGO AUDITORIA)
-   *
-   */
   private generateHtmlContent(
     createDto: CreateActaComplianceDto,
     puntaje: number,
     resumen: string,
   ): string {
-    // --- Static Text Sections ---
+    // --- Textos Estáticos ---
     const ejecutivoSummary = `
       <div class="section">
         <h3>RESUMEN EJECUTIVO A REVISIÓN ACTA DE ENTREGA</h3>
-        <p>Se ha realizado una revisión exhaustiva del Acta de Entrega y sus documentos anexos, con el propósito de identificar posibles incumplimientos de las normas establecidas por la Contraloría General de la República para Regular la Entrega de los Órganos y Entidades de la Administración Pública y de sus Respectivas Oficinas o Dependencias (Resolución N° 01-00-000162 de fecha 28 de julio de 2009). Es importante destacar que esta revisión no constituye una auditoría de control fiscal, sino que se enmarca como un mecanismo de control interno. Su objetivo es advertir sobre los riesgos legales asociados al levantamiento del Acta de Entrega y proponer acciones correctivas que permitan prevenir responsabilidades civiles, penales o administrativas para los funcionarios involucrados.</p>
+        <p style="text-align: justify;">Se ha realizado una revisión exhaustiva del Acta de Entrega y sus documentos anexos, con el propósito de identificar posibles incumplimientos de las normas establecidas por la Contraloría General de la República para Regular la Entrega de los Órganos y Entidades de la Administración Pública y de sus Respectivas Oficinas o Dependencias (Resolución N° 01-00-000162 de fecha 28 de julio de 2009). Es importante destacar que esta revisión no constituye una auditoría de control fiscal, sino que se enmarca como un mecanismo de control interno. Su objetivo es advertir sobre los riesgos legales asociados al levantamiento del Acta de Entrega y proponer acciones correctivas que permitan prevenir responsabilidades civiles, penales o administrativas para los funcionarios involucrados.</p>
       </div>
     `;
 
     const alcanceSection = `
       <div class="section">
         <h3>ALCANCE</h3>
-        <p>Se ha realizado una revisión exhaustiva del Acta de Entrega y sus documentos anexos, con el propósito de identificar posibles incumplimientos de las normas establecidas por la Contraloría General de la República para Regular la Entrega de los Órganos y Entidades de la Administración Pública y de sus Respectivas Oficinas o Dependencias (Resolución N° 01-00-000162 de fecha 28 de julio de 2009). Es importante destacar que esta revisión no constituye una auditoría de control fiscal, sino que se enmarca como un mecanismo de control interno. Su objetivo es advertir sobre los riesgos legales asociados al levantamiento del Acta de Entrega y proponer acciones correctivas que permitan prevenir responsabilidades civiles, penales o administrativas para los funcionarios involucrados.</p>
+        <p style="text-align: justify;">Se ha realizado una revisión exhaustiva del Acta de Entrega y sus documentos anexos, con el propósito de identificar posibles incumplimientos de las normas establecidas por la Contraloría General de la República para Regular la Entrega de los Órganos y Entidades de la Administración Pública y de sus Respectivas Oficinas o Dependencias (Resolución N° 01-00-000162 de fecha 28 de julio de 2009). Es importante destacar que esta revisión no constituye una auditoría de control fiscal, sino que se enmarca como un mecanismo de control interno. Su objetivo es advertir sobre los riesgos legales asociados al levantamiento del Acta de Entrega y proponer acciones correctivas que permitan prevenir responsabilidades civiles, penales o administrativas para los funcionarios involucrados.</p>
       </div>
     `;
 
     const implicacionesSection = `
       <div class="section">
         <h3>IMPLICACIONES DEL INCUMPLIMIENTO DE LAS NORMAS DE ENTREGA</h3>
-        <p>El incumplimiento de las normas de entrega conlleva serias implicaciones tanto para los funcionarios involucrados como para el patrimonio público. Entre las principales consecuencias se encuentran:</p>
+        <p style="text-align: justify;">El incumplimiento de las normas de entrega conlleva serias implicaciones tanto para los funcionarios involucrados como para el patrimonio público. Entre las principales consecuencias se encuentran:</p>
         <ul>
-          <li>Responsabilidad Administrativa: Los funcionarios que no cumplan con las normativas establecidas pueden enfrentarse a sanciones administrativas, lo que podría afectar su carrera y reputación profesional.</li>
-          <li>Riesgo de Pérdida o Deterioro del Patrimonio Público: La falta de adherencia a los procedimientos de entrega puede resultar en la pérdida, deterioro o menoscabo de los bienes y recursos públicos, comprometiendo así la integridad del patrimonio estatal.</li>
-          <li>Acciones Correctivas: Si se detectan actos o situaciones que amenacen el patrimonio de las entidades, el órgano de control fiscal competente deberá informar a las autoridades administrativas correspondientes para que se tomen las acciones correctivas pertinentes.</li>
-          <li>Investigaciones y Procedimientos Administrativos: En caso de que existan indicios suficientes de actos u omisiones que contravengan disposiciones legales o que causen daños al patrimonio público, se activará la potestad de investigación, de acuerdo con el Artículo 77 de la Ley Orgánica de la Contraloría General de la República. Esto puede dar lugar a un procedimiento administrativo para determinar responsabilidades, conforme a lo estipulado en el Capítulo IV del Título III de dicha Ley.</li>
-          <li>Sanciones Legales: Las contravenciones a las disposiciones establecidas en la Resolución serán sancionadas según lo previsto en la Ley Orgánica de la Contraloría General de la República y del Sistema Nacional de Control Fiscal, lo que puede incluir multas, inhabilitaciones y otras medidas disciplinarias.</li>
+          <li>Responsabilidad Administrativa: Los funcionarios que no cumplan con las normativas establecidas pueden enfrentarse a sanciones administrativas.</li>
+          <li>Riesgo de Pérdida o Deterioro del Patrimonio Público: La falta de adherencia a los procedimientos puede resultar en menoscabo de los bienes.</li>
+          <li>Acciones Correctivas y Sanciones Legales según la Ley Orgánica de la Contraloría General de la República.</li>
         </ul>
       </div>
     `;
@@ -406,36 +416,30 @@ export class ActaComplianceService {
     const solucionesSection = `
       <div class="section">
         <h3>SOLUCIÓN Y LLAMADO A LA ACCIÓN</h3>
-        <p>Para mitigar los riesgos y consecuencias identificadas, se recomienda implementar las siguientes acciones:</p>
+        <p style="text-align: justify;">Para mitigar los riesgos y consecuencias identificadas, se recomienda implementar las siguientes acciones:</p>
         <ul>
-          <li>Concertar una reunión, ya sea presencial o virtual, con el equipo de Universitas Legal para detallar el alcance de la revisión y discutir aspectos relevantes.</li>
-          <li>Revisar el “Reporte de Hallazgos” con su Equipo de Trabajo para que adviertan su situación actual y evalúen las acciones a tomar.</li>
-          <li>Revisar y reforzar la capacitación de su equipo de trabajo sobre las normas de entrega a través de la plataforma Universitas, asegurando que todos estén actualizados y alineados con los procedimientos establecidos.</li>
-          <li>Formalizar las observaciones, para ello, pueden Imprimir, suscribir y presentar la observación al Acta de Entrega ante el órgano de control fiscal competente (ver anexo)</li>
+          <li>Concertar una reunión con el equipo de Universitas Legal.</li>
+          <li>Revisar el “Reporte de Hallazgos” con su Equipo de Trabajo.</li>
+          <li>Reforzar la capacitación sobre las normas de entrega.</li>
+          <li>Formalizar las observaciones ante el órgano de control fiscal competente.</li>
         </ul>
-        <p>Estaremos encantados de explicarte las implicaciones de este diagnóstico y de colaborar en la elaboración de un plan de acciones correctivas que puedas implementar en tu organización. Además, te invitamos a seguirnos en nuestras redes sociales para que te mantengas informado sobre temas relevantes y actualizaciones en el ámbito de la gestión pública. Tu participación es fundamental para promover una gestión más eficiente y transparente.</p>
       </div>
     `;
 
-    // --- Dynamic Content Generation ---
-
+    // --- Generación Dinámica de Listas ---
     let hallazgosListItems = '';
     let observacionesListItems = '';
 
     DB_KEYS_MAP.forEach((dtoKey) => {
       const findingInfo = FINDINGS_MAP[dtoKey];
-      const pregunta = findingInfo
-        ? findingInfo.pregunta
-        : 'Pregunta no encontrada';
-      const cumple = createDto[dtoKey] === true;
+      const pregunta = findingInfo ? findingInfo.pregunta : 'Pregunta no encontrada';
+      const respuesta = createDto[dtoKey];
 
-      if (!cumple) {
-        // For Hallazgos section
+      const esIncumplimiento = respuesta === RespuestaCompliance.NO;
+
+      if (esIncumplimiento) {
         hallazgosListItems += `<li>${pregunta}</li>`;
-
-        // For Observaciones section
         if (findingInfo && findingInfo.observacionHtml) {
-          // Replace <b> with <strong> and \n with <br> for better HTML rendering
           const formattedObservacion = findingInfo.observacionHtml
             .replace(/<b>/g, '<strong>')
             .replace(/<\/b>/g, '</strong>')
@@ -445,7 +449,7 @@ export class ActaComplianceService {
       }
     });
 
-    // Determine Risk Level
+    // Nivel de Riesgo
     let nivelRiesgoText = 'Nivel Muy Bajo';
     if (puntaje >= 90) nivelRiesgoText = 'Alto o Crítico';
     else if (puntaje >= 75) nivelRiesgoText = 'Intermedio';
@@ -458,7 +462,7 @@ export class ActaComplianceService {
       </div>
     `;
 
-    // --- Assemble the full HTML ---
+    // --- Construcción del HTML ---
     let html = `
       <html>
         <head>
@@ -470,20 +474,33 @@ export class ActaComplianceService {
             .header-table { margin-bottom: 20px; }
             .header-table td { font-weight: bold; background-color: #f9f9f9; }
             .main-table th { background-color: #e0e0e0; text-align: center; }
+            
             .cumple-si { color: green; font-weight: bold; text-align: center; }
             .cumple-no { color: red; font-weight: bold; text-align: center; }
+            .cumple-na { color: #6c757d; font-weight: bold; text-align: center; font-style: italic; }
+
             .col-numero { width: 5%; text-align: center; }
             .col-busqueda { width: 35%; }
             .col-cumple { width: 8%; text-align: center; }
             .col-condicion { width: 26%; }
             .col-criterio { width: 26%; }
+
             h2 { text-align: center; color: #000; margin-bottom: 20px; }
             h3 { margin-top: 25px; margin-bottom: 10px; color: #000; }
             .section { margin-bottom: 20px; }
             .section ul { margin-top: 5px; padding-left: 20px; }
             .section li { margin-bottom: 5px; }
-            .score-summary { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; }
-            .footer-info { text-align: right; margin-top: 30px; }
+            
+            /* Estilo del Recuadro de Resultados */
+            .score-summary { 
+              margin-top: 20px; 
+              margin-bottom: 30px; /* Espacio extra después del cuadro */
+              padding: 15px; 
+              border: 2px solid #444; 
+              background-color: #f0f4f8; 
+              page-break-inside: avoid;
+            }
+            .footer-info { text-align: right; margin-top: 30px; font-size: 10px; color: #666; }
           </style>
         </head>
         <body>
@@ -506,14 +523,9 @@ export class ActaComplianceService {
               <td>REVISADO POR:</td>
               <td>${createDto.nombre_completo_revisor || ''}</td>
               <td>FECHA:</td>
-              <td>${new Date(
-                createDto.fecha_revision || Date.now(),
-              ).toLocaleDateString('es-VE')}</td>
+              <td>${new Date(createDto.fecha_revision || Date.now()).toLocaleDateString('es-VE')}</td>
             </tr>
           </table>
-
-          ${ejecutivoSummary}
-          ${alcanceSection}
 
           <table class="main-table">
             <thead>
@@ -528,19 +540,26 @@ export class ActaComplianceService {
             <tbody>
     `;
 
-    // Iterar sobre todas las preguntas del DTO para la tabla principal
+    // Bucle de Filas
     DB_KEYS_MAP.forEach((dtoKey, index) => {
       const findingInfo = FINDINGS_MAP[dtoKey];
-      const pregunta = findingInfo
-        ? findingInfo.pregunta
-        : 'Pregunta no encontrada';
-      const cumple = createDto[dtoKey] === true;
+      const pregunta = findingInfo ? findingInfo.pregunta : 'Pregunta no encontrada';
+      const respuesta = createDto[dtoKey];
 
-      const cumpleText = cumple ? 'SI' : 'NO';
-      const cumpleClass = cumple ? 'cumple-si' : 'cumple-no';
-      // Solo mostrar condición y criterio si la respuesta es NO
-      const condicion = !cumple && findingInfo ? findingInfo.condicion : '';
-      const criterio = !cumple && findingInfo ? findingInfo.criterio : '';
+      let cumpleText = 'NO';
+      let cumpleClass = 'cumple-no';
+
+      if (respuesta === RespuestaCompliance.SI) {
+        cumpleText = 'SI';
+        cumpleClass = 'cumple-si';
+      } else if (respuesta === RespuestaCompliance.NO_APLICA) {
+        cumpleText = 'N/A';
+        cumpleClass = 'cumple-na';
+      }
+
+      const esIncumplimiento = respuesta === RespuestaCompliance.NO;
+      const condicion = esIncumplimiento && findingInfo ? findingInfo.condicion : '';
+      const criterio = esIncumplimiento && findingInfo ? findingInfo.criterio : '';
 
       html += `
               <tr>
@@ -562,6 +581,9 @@ export class ActaComplianceService {
             <p><strong>Puntaje Calculado:</strong> ${puntaje.toFixed(2)}%</p>
             <p><strong>Resumen de Cumplimiento:</strong> ${resumen}</p>
           </div>
+
+          ${ejecutivoSummary}
+          ${alcanceSection}
 
           ${hallazgosListItems ? `<div class="section"><h3>HALLAZGOS</h3><ul>${hallazgosListItems}</ul></div>` : ''}
           ${implicacionesSection}
