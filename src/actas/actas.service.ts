@@ -19,16 +19,12 @@ export class ActasService {
     private readonly actaDocxService: ActaDocxService,
   ) {}
 
-  /**
-   * Crea una nueva acta.
-   */
   async create(createActaDto: CreateActaDto, user: User) {
     const { type, nombreEntidad, metadata } = createActaDto;
 
-    // 1. Generamos el número de acta usando la NUEVA lógica segura
+    // 1. Generamos el número de acta con la lógica corregida (Último + 1)
     const numeroActa = await this.generarNumeroActa();
 
-    // 2. Creamos el metadata completo
     const metadataCompleto = {
       ...metadata,
       nombreEntidad: nombreEntidad,
@@ -37,7 +33,6 @@ export class ActasService {
       type: type,
     };
 
-    // 3. Guardamos en base de datos
     const nuevaActa = await this.prisma.acta.create({
       data: {
         numeroActa: numeroActa,
@@ -52,32 +47,32 @@ export class ActasService {
     return nuevaActa;
   }
 
-  // --- 👇 Mtodo Corregido: Generar nmero consecutivo seguro 👇 ---
+  // --- CAMBIO PRINCIPAL AQUÍ ---
+  // Busca el último número existente en lugar de contar registros
   private async generarNumeroActa(): Promise<string> {
-    // 1. Buscamos la ltima acta creada (ordenada por fecha de creacin descendente)
-    // Esto nos da el ltimo nmero real usado, sin importar si se borraron actas intermedias.
+    // Busca el acta más reciente ordenando por fecha de creación
     const lastActa = await this.prisma.acta.findFirst({
       orderBy: { createdAt: 'desc' },
     });
 
-    let nextNumber = 1; // Si no hay actas, empezamos en 1
+    let nextNumber = 1; // Valor inicial si la base de datos está vacía
 
-    // 2. Si existe una ltima acta, extraemos su nmero
+    // Si ya existe un acta, extraemos su número y sumamos 1
     if (lastActa && lastActa.numeroActa) {
-      // Asumimos formato "ACTA-0001" -> split separa en ["ACTA", "0001"]
+      // El formato es "ACTA-0001", hacemos split para obtener ["ACTA", "0001"]
       const parts = lastActa.numeroActa.split('-');
       if (parts.length === 2) {
         const lastSequence = parseInt(parts[1], 10);
         if (!isNaN(lastSequence)) {
-          nextNumber = lastSequence + 1; // Sumamos 1 al ltimo nmero encontrado
+          nextNumber = lastSequence + 1; // Aquí ocurre la magia: 5 + 1 = 6 (aunque solo hayan 4 registros)
         }
       }
     }
 
-    // 3. Formateamos el nuevo nmero (ej: 6 -> "ACTA-0006")
+    // Formatea el nuevo número (ej: 6 se convierte en "ACTA-0006")
     return `ACTA-${nextNumber.toString().padStart(4, '0')}`;
   }
-  // ----------------------------------------------------------------
+  // -----------------------------
 
   async findAllForUser(user: User, filterDto: GetActasFilterDto) {
     const { search, status, type, page = 1, limit = 10 } = filterDto;
@@ -154,10 +149,15 @@ export class ActasService {
     const currentActa = await this.findOneForUser(id, user);
 
     const { nombreEntidad, type, metadata } = updateActaDto;
+
     const dataToUpdate: Prisma.ActaUpdateInput = {};
 
-    if (nombreEntidad) dataToUpdate.nombreEntidad = nombreEntidad;
-    if (type) dataToUpdate.type = type;
+    if (nombreEntidad) {
+      dataToUpdate.nombreEntidad = nombreEntidad;
+    }
+    if (type) {
+      dataToUpdate.type = type;
+    }
 
     if (metadata || nombreEntidad) {
       const newMetadata = {
