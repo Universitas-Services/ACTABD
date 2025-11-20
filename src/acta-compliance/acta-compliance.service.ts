@@ -20,6 +20,8 @@ import {
 import { UpdateActaComplianceDto } from './dto/update-acta-compliance.dto';
 // Importa las constantes
 import { DB_KEYS_MAP, FINDINGS_MAP } from './acta-compliance.constants';
+// 👇 1. IMPORTA EL NUEVO DTO DE FILTROS
+import { GetComplianceFilterDto } from './dto/get-compliance-filter.dto';
 
 @Injectable()
 export class ActaComplianceService {
@@ -31,6 +33,7 @@ export class ActaComplianceService {
 
   /**
    * Crea un nuevo registro de cumplimiento (checklist)
+   * AHORA GENERA AUTOMÁTICAMENTE EL NÚMERO CONSECUTIVO
    */
   async create(createActaComplianceDto: CreateActaComplianceDto, user: User) {
     const userId = user.id;
@@ -39,14 +42,18 @@ export class ActaComplianceService {
     const puntaje = this.calculateScore(createActaComplianceDto);
     const resumen = this.generateSummary(puntaje);
 
+    // 👇 2. Genera el número consecutivo (ej: COMP-0005)
+    const numeroCompliance = await this.generarNumeroCompliance();
+
     try {
       const newCompliance = await this.prisma.actaCompliance.create({
         data: {
           ...createActaComplianceDto, // Esparce las propiedades del DTO
           puntajeCalculado: puntaje,
           resumenCumplimiento: resumen,
+          numeroCompliance: numeroCompliance, // 👈 Guardamos el número generado
           userId: userId,
-        } as Prisma.ActaComplianceUncheckedCreateInput, // 👈 ¡AGREGA ESTA LÍNEA!
+        } as Prisma.ActaComplianceUncheckedCreateInput,
       });
       return newCompliance;
     } catch (error) {
@@ -57,13 +64,73 @@ export class ActaComplianceService {
     }
   }
 
+  // 👇 3. MÉTODO PRIVADO PARA GENERAR EL CONSECUTIVO
+  private async generarNumeroCompliance(): Promise<string> {
+    const count = await this.prisma.actaCompliance.count();
+    // Genera algo como "COMP-0001", "COMP-0002", etc.
+    return `COMP-${(count + 1).toString().padStart(4, '0')}`;
+  }
+
   /**
-   * Obtiene todos los checklists del usuario logueado
+   * Obtiene todos los checklists del usuario (Paginado y con Búsqueda)
+   * AHORA RECIBE LOS FILTROS
    */
-  async findAllForUser(user: User) {
-    return this.prisma.actaCompliance.findMany({
-      where: { userId: user.id },
-    });
+  async findAllForUser(user: User, filterDto: GetComplianceFilterDto) {
+    const { search, page = 1, limit = 10 } = filterDto;
+    const skip = (page - 1) * limit;
+
+    // Construcción del filtro dinámico
+    const where: Prisma.ActaComplianceWhereInput = {
+      userId: user.id,
+    };
+
+    // Si hay término de búsqueda, busca en estos 3 campos
+    if (search) {
+      where.OR = [
+        {
+          nombre_organo_entidad: { contains: search, mode: 'insensitive' },
+        },
+        {
+          numeroCompliance: { contains: search, mode: 'insensitive' },
+        },
+        {
+          codigo_documento_revisado: { contains: search, mode: 'insensitive' },
+        },
+      ];
+    }
+
+    // Ejecutamos transacción para obtener total y datos
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.actaCompliance.count({ where }),
+      this.prisma.actaCompliance.findMany({
+        where,
+        take: limit,
+        skip: skip,
+        orderBy: { createdAt: 'desc' },
+        // Seleccionamos campos relevantes para la tabla (opcional, optimiza la carga)
+        select: {
+          id: true,
+          numeroCompliance: true,
+          nombre_organo_entidad: true,
+          fecha_revision: true,
+          puntajeCalculado: true,
+          resumenCumplimiento: true,
+          createdAt: true,
+          // Puedes agregar más campos si los necesitas en el listado
+        },
+      }),
+    ]);
+
+    // Retornamos estructura paginada estandarizada
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        lastPage: Math.ceil(total / limit),
+        limit,
+      },
+    };
   }
 
   /**
@@ -92,9 +159,7 @@ export class ActaComplianceService {
   ) {
     const currentCompliance = await this.findOneForUser(id, user);
 
-    // 2. Crea un objeto temporal para recalcular el puntaje
-    // Fusionamos lo que ya está en base de datos con lo que viene en el update.
-    // Usamos 'as unknown' primero para evitar conflictos entre String (BD) y Enum (DTO)
+    // Crea un objeto temporal para recalcular el puntaje
     const dtoForCalculation = {
       ...currentCompliance,
       ...updateActaComplianceDto,
@@ -102,14 +167,14 @@ export class ActaComplianceService {
     const puntaje = this.calculateScore(dtoForCalculation);
     const resumen = this.generateSummary(puntaje);
 
-    // 4. Actualiza en base de datos
+    // Actualiza en base de datos
     return this.prisma.actaCompliance.update({
       where: { id },
       data: {
-        ...updateActaComplianceDto,     // Los campos que cambiaron
-        puntajeCalculado: puntaje,      // Nuevo puntaje
-        resumenCumplimiento: resumen,   // Nuevo resumen
-      } as Prisma.ActaComplianceUncheckedUpdateInput, 
+        ...updateActaComplianceDto,
+        puntajeCalculado: puntaje,
+        resumenCumplimiento: resumen,
+      } as Prisma.ActaComplianceUncheckedUpdateInput,
     });
   }
 
@@ -129,8 +194,6 @@ export class ActaComplianceService {
   async generatePdfBuffer(id: string, user: User): Promise<Buffer> {
     const complianceData = await this.findOneForUser(id, user);
 
-    // Genera el contenido HTML
-    // Se hace cast a unknown y luego al DTO porque los tipos de Prisma (String?) y DTO (Enum) son compatibles en JS
     const htmlContent = this.generateHtmlContent(
       complianceData as unknown as CreateActaComplianceDto,
       complianceData.puntajeCalculado ?? 0,
@@ -139,7 +202,6 @@ export class ActaComplianceService {
 
     let browser: puppeteer.Browser | undefined;
     try {
-      // Configuración de Puppeteer
       browser = await puppeteer.launch({
         args: [
           '--no-sandbox',
@@ -209,9 +271,6 @@ export class ActaComplianceService {
 
   // --- LÓGICA DE NEGOCIO ---
 
-  /**
-   * Helper para verificar propiedad del registro
-   */
   private checkOwnership(
     compliance: { userId: string } | null,
     userId: string,
@@ -339,12 +398,6 @@ export class ActaComplianceService {
     };
   }
 
-  /**
-   * Calcula el puntaje del checklist.
-   * LÓGICA ACTUALIZADA:
-   * - Suma puntos si la respuesta es 'SI' o 'NO_APLICA'.
-   * - 'NO_APLICA' se considera cumplimiento total a efectos de puntaje.
-   */
   private calculateScore(dto: CreateActaComplianceDto): number {
     const ponderaciones = this.getPonderaciones();
     let totalPonderacion = 0;
@@ -355,10 +408,8 @@ export class ActaComplianceService {
       const ponderacion = ponderaciones[typedKey] || 0;
       const respuesta = dto[typedKey];
 
-      // Siempre sumamos al denominador (total posible)
       totalPonderacion += ponderacion;
 
-      // Sumamos puntos si es 'SI' O 'NO_APLICA'
       if (
         respuesta === RespuestaCompliance.SI ||
         respuesta === RespuestaCompliance.NO_APLICA
@@ -378,9 +429,6 @@ export class ActaComplianceService {
     return 'Nivel Muy Bajo';
   }
 
-  // ---
-  // --- FUNCIÓN DE GENERACIÓN DE HTML ACTUALIZADA ---
-  // ---
   private generateHtmlContent(
     createDto: CreateActaComplianceDto,
     puntaje: number,
@@ -432,7 +480,9 @@ export class ActaComplianceService {
 
     DB_KEYS_MAP.forEach((dtoKey) => {
       const findingInfo = FINDINGS_MAP[dtoKey];
-      const pregunta = findingInfo ? findingInfo.pregunta : 'Pregunta no encontrada';
+      const pregunta = findingInfo
+        ? findingInfo.pregunta
+        : 'Pregunta no encontrada';
       const respuesta = createDto[dtoKey];
 
       const esIncumplimiento = respuesta === RespuestaCompliance.NO;
@@ -523,7 +573,9 @@ export class ActaComplianceService {
               <td>REVISADO POR:</td>
               <td>${createDto.nombre_completo_revisor || ''}</td>
               <td>FECHA:</td>
-              <td>${new Date(createDto.fecha_revision || Date.now()).toLocaleDateString('es-VE')}</td>
+              <td>${new Date(
+                createDto.fecha_revision || Date.now(),
+              ).toLocaleDateString('es-VE')}</td>
             </tr>
           </table>
 
@@ -543,7 +595,9 @@ export class ActaComplianceService {
     // Bucle de Filas
     DB_KEYS_MAP.forEach((dtoKey, index) => {
       const findingInfo = FINDINGS_MAP[dtoKey];
-      const pregunta = findingInfo ? findingInfo.pregunta : 'Pregunta no encontrada';
+      const pregunta = findingInfo
+        ? findingInfo.pregunta
+        : 'Pregunta no encontrada';
       const respuesta = createDto[dtoKey];
 
       let cumpleText = 'NO';
@@ -558,8 +612,10 @@ export class ActaComplianceService {
       }
 
       const esIncumplimiento = respuesta === RespuestaCompliance.NO;
-      const condicion = esIncumplimiento && findingInfo ? findingInfo.condicion : '';
-      const criterio = esIncumplimiento && findingInfo ? findingInfo.criterio : '';
+      const condicion =
+        esIncumplimiento && findingInfo ? findingInfo.condicion : '';
+      const criterio =
+        esIncumplimiento && findingInfo ? findingInfo.criterio : '';
 
       html += `
               <tr>
@@ -585,11 +641,19 @@ export class ActaComplianceService {
           ${ejecutivoSummary}
           ${alcanceSection}
 
-          ${hallazgosListItems ? `<div class="section"><h3>HALLAZGOS</h3><ul>${hallazgosListItems}</ul></div>` : ''}
+          ${
+            hallazgosListItems
+              ? `<div class="section"><h3>HALLAZGOS</h3><ul>${hallazgosListItems}</ul></div>`
+              : ''
+          }
           ${implicacionesSection}
           ${nivelRiesgoSection}
           ${solucionesSection}
-          ${observacionesListItems ? `<div class="section"><h3>OBSERVACIONES AL ACTA DE ENTREGA (ANEXO)</h3><ul>${observacionesListItems}</ul></div>` : ''}
+          ${
+            observacionesListItems
+              ? `<div class="section"><h3>OBSERVACIONES AL ACTA DE ENTREGA (ANEXO)</h3><ul>${observacionesListItems}</ul></div>`
+              : ''
+          }
           
           <div class="footer-info">
             <p>Lugar y Fecha del Informe de Revisión<br>[Ciudad, Fecha]</p>

@@ -11,6 +11,15 @@ export class ActaCompliance implements ActaCompliancePrisma {
   @ApiProperty({ example: 'uuid-user-id' })
   userId: string;
 
+  // 👇 AQUI ESTA LA CORRECCIÓN: Agregamos el campo que faltaba
+  @ApiProperty({
+    example: 'COMP-0001',
+    nullable: true,
+    description: 'Número consecutivo de control',
+  })
+  numeroCompliance: string | null;
+  // ---------------------------------------------------------
+
   // --- Datos Generales ---
   @ApiProperty({ required: false, nullable: true })
   correo_electronico: string | null;
