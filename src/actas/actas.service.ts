@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateActaDto } from '../auth/dto/create-acta.dto';
 import { UpdateActaDto } from '../auth/dto/update-acta.dto';
-import { User, Acta, ActaStatus, Prisma } from '@prisma/client'; // <-- Importa Prisma
+import { User, Acta, ActaStatus, Prisma } from '@prisma/client';
 import { ActaDocxService } from './acta-docx.service';
 import { GetActasFilterDto } from './dto/get-actas-filter.dto';
 
@@ -20,83 +20,82 @@ export class ActasService {
   ) {}
 
   /**
-   * CORRECCIÓN DE ERRORES (Línea 19 y 29):
-   * - Eliminamos 'ciudad' y 'estado' de la desestructuración.
-   * - Eliminamos 'ciudad' y 'estado' de la llamada a la base de datos.
-   * - Añadimos la lógica de 'metadataCompleto' que copia los campos.
+   * Crea una nueva acta.
    */
   async create(createActaDto: CreateActaDto, user: User) {
-    // 1. Extraemos SOLO los campos que existen en el DTO
     const { type, nombreEntidad, metadata } = createActaDto;
 
-    // 2. Generamos el número de acta
+    // 1. Generamos el número de acta usando la NUEVA lógica segura
     const numeroActa = await this.generarNumeroActa();
 
-    // 3. Creamos el metadata completo (copiando los campos de nivel superior)
+    // 2. Creamos el metadata completo
     const metadataCompleto = {
       ...metadata,
       nombreEntidad: nombreEntidad,
-      nombreOrgano: nombreEntidad, // Como discutimos, se duplica
+      nombreOrgano: nombreEntidad,
       numeroActa: numeroActa,
       type: type,
     };
 
-    // 4. Creamos el acta en la base de datos
+    // 3. Guardamos en base de datos
     const nuevaActa = await this.prisma.acta.create({
       data: {
         numeroActa: numeroActa,
         nombreEntidad: nombreEntidad,
         type: type,
-        status: ActaStatus.GUARDADA, // Estatus por defecto
+        status: ActaStatus.GUARDADA,
         userId: user.id,
         metadata: metadataCompleto,
-        // (Ya no hay error en la línea 29 porque no pasamos 'ciudad')
       },
     });
 
     return nuevaActa;
   }
 
-  // Función para generar el número de acta (ejemplo)
+  // --- 👇 Mtodo Corregido: Generar nmero consecutivo seguro 👇 ---
   private async generarNumeroActa(): Promise<string> {
-    const count = await this.prisma.acta.count();
-    // Ajusta el prefijo si lo deseas
-    return `ACTA-${(count + 1).toString().padStart(4, '0')}`;
-  }
+    // 1. Buscamos la ltima acta creada (ordenada por fecha de creacin descendente)
+    // Esto nos da el ltimo nmero real usado, sin importar si se borraron actas intermedias.
+    const lastActa = await this.prisma.acta.findFirst({
+      orderBy: { createdAt: 'desc' },
+    });
 
-  /**
-   * CORRECCIÓN DE ERROR (Línea 79):
-   * - Cambiamos 'fecha' por 'createdAt' para ordenar.
-   * - Añadimos un 'select' para tu panel de administrativo.
-   */
+    let nextNumber = 1; // Si no hay actas, empezamos en 1
+
+    // 2. Si existe una ltima acta, extraemos su nmero
+    if (lastActa && lastActa.numeroActa) {
+      // Asumimos formato "ACTA-0001" -> split separa en ["ACTA", "0001"]
+      const parts = lastActa.numeroActa.split('-');
+      if (parts.length === 2) {
+        const lastSequence = parseInt(parts[1], 10);
+        if (!isNaN(lastSequence)) {
+          nextNumber = lastSequence + 1; // Sumamos 1 al ltimo nmero encontrado
+        }
+      }
+    }
+
+    // 3. Formateamos el nuevo nmero (ej: 6 -> "ACTA-0006")
+    return `ACTA-${nextNumber.toString().padStart(4, '0')}`;
+  }
+  // ----------------------------------------------------------------
+
   async findAllForUser(user: User, filterDto: GetActasFilterDto) {
     const { search, status, type, page = 1, limit = 10 } = filterDto;
-
-    // 1. Calcular paginación
     const skip = (page - 1) * limit;
 
-    // 2. Construir el filtro "where" dinámicamente
     const where: Prisma.ActaWhereInput = {
-      userId: user.id, // Siempre filtrar por el usuario actual
+      userId: user.id,
     };
 
-    // Filtro por estatus
-    if (status) {
-      where.status = status;
-    }
+    if (status) where.status = status;
+    if (type) where.type = type;
 
-    // Filtro por tipo
-    if (type) {
-      where.type = type;
-    }
-
-    // Búsqueda flexible (Search)
     if (search) {
       where.OR = [
         {
           nombreEntidad: {
             contains: search,
-            mode: 'insensitive', // Ignora mayúsculas/minúsculas (Postgres)
+            mode: 'insensitive',
           },
         },
         {
@@ -108,8 +107,6 @@ export class ActasService {
       ];
     }
 
-    // 3. Ejecutar dos consultas: una para contar y otra para traer datos
-    // Usamos una transacción ($transaction) para que sea eficiente
     const [total, data] = await this.prisma.$transaction([
       this.prisma.acta.count({ where }),
       this.prisma.acta.findMany({
@@ -126,12 +123,10 @@ export class ActasService {
           type: true,
           status: true,
           createdAt: true,
-          // No traemos metadata ni el usuario completo para hacer la lista ligera
         },
       }),
     ]);
 
-    // 4. Retornar estructura paginada estándar
     return {
       data,
       meta: {
@@ -143,7 +138,6 @@ export class ActasService {
     };
   }
 
-  // Encuentra un acta y verifica que el usuario sea el dueño
   async findOneForUser(id: string, user: User): Promise<Acta> {
     const acta = await this.prisma.acta.findUnique({
       where: { id },
@@ -156,32 +150,21 @@ export class ActasService {
     return acta;
   }
 
-  /**
-   * Lógica de Actualización Corregida
-   */
   async update(id: string, updateActaDto: UpdateActaDto, user: User) {
-    const currentActa = await this.findOneForUser(id, user); // Verifica propiedad
+    const currentActa = await this.findOneForUser(id, user);
 
     const { nombreEntidad, type, metadata } = updateActaDto;
-
-    // Inicia el objeto de datos para Prisma
     const dataToUpdate: Prisma.ActaUpdateInput = {};
 
-    if (nombreEntidad) {
-      dataToUpdate.nombreEntidad = nombreEntidad;
-    }
-    if (type) {
-      dataToUpdate.type = type;
-    }
+    if (nombreEntidad) dataToUpdate.nombreEntidad = nombreEntidad;
+    if (type) dataToUpdate.type = type;
 
-    // Lógica para fusionar el metadata (si se actualiza)
     if (metadata || nombreEntidad) {
       const newMetadata = {
-        ...(currentActa.metadata as Record<string, any>), // Empieza con lo antiguo
-        ...(metadata || {}), // Fusiona los nuevos cambios de metadata
+        ...(currentActa.metadata as Record<string, any>),
+        ...(metadata || {}),
       };
 
-      // Si 'nombreEntidad' cambió, actualízalo también dentro del metadata
       if (nombreEntidad) {
         newMetadata.nombreEntidad = nombreEntidad;
         newMetadata.nombreOrgano = nombreEntidad;
@@ -196,15 +179,13 @@ export class ActasService {
     });
   }
 
-  // Elimina un acta
   async remove(id: string, user: User) {
-    await this.findOneForUser(id, user); // Verifica propiedad
+    await this.findOneForUser(id, user);
     return this.prisma.acta.delete({
       where: { id },
     });
   }
 
-  // Actualiza solo el estatus (usado por el controlador)
   async updateStatus(actaId: string, status: ActaStatus) {
     return this.prisma.acta.update({
       where: { id: actaId },
@@ -212,7 +193,6 @@ export class ActasService {
     });
   }
 
-  // Helper para verificar propiedad
   private checkActaOwnership(acta: Acta, userId: string) {
     if (acta.userId !== userId) {
       throw new ForbiddenException(
