@@ -10,6 +10,7 @@ import { CreateActaDto } from '../auth/dto/create-acta.dto';
 import { UpdateActaDto } from '../auth/dto/update-acta.dto';
 import { User, Acta, ActaStatus, Prisma } from '@prisma/client'; // <-- Importa Prisma
 import { ActaDocxService } from './acta-docx.service';
+import { GetActasFilterDto } from './dto/get-actas-filter.dto';
 
 @Injectable()
 export class ActasService {
@@ -68,21 +69,78 @@ export class ActasService {
    * - Cambiamos 'fecha' por 'createdAt' para ordenar.
    * - Añadimos un 'select' para tu panel de administrativo.
    */
-  async findAllForUser(user: User) {
-    return this.prisma.acta.findMany({
-      where: { userId: user.id },
-      orderBy: {
-        createdAt: 'desc', // <-- Arreglo del error de 'fecha'
+  async findAllForUser(user: User, filterDto: GetActasFilterDto) {
+    const { search, status, type, page = 1, limit = 10 } = filterDto;
+
+    // 1. Calcular paginación
+    const skip = (page - 1) * limit;
+
+    // 2. Construir el filtro "where" dinámicamente
+    const where: Prisma.ActaWhereInput = {
+      userId: user.id, // Siempre filtrar por el usuario actual
+    };
+
+    // Filtro por estatus
+    if (status) {
+      where.status = status;
+    }
+
+    // Filtro por tipo
+    if (type) {
+      where.type = type;
+    }
+
+    // Búsqueda flexible (Search)
+    if (search) {
+      where.OR = [
+        {
+          nombreEntidad: {
+            contains: search,
+            mode: 'insensitive', // Ignora mayúsculas/minúsculas (Postgres)
+          },
+        },
+        {
+          numeroActa: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+      ];
+    }
+
+    // 3. Ejecutar dos consultas: una para contar y otra para traer datos
+    // Usamos una transacción ($transaction) para que sea eficiente
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.acta.count({ where }),
+      this.prisma.acta.findMany({
+        where,
+        take: limit,
+        skip: skip,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          numeroActa: true,
+          nombreEntidad: true,
+          type: true,
+          status: true,
+          createdAt: true,
+          // No traemos metadata ni el usuario completo para hacer la lista ligera
+        },
+      }),
+    ]);
+
+    // 4. Retornar estructura paginada estándar
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        lastPage: Math.ceil(total / limit),
+        limit,
       },
-      select: {
-        id: true,
-        numeroActa: true,
-        nombreEntidad: true,
-        type: true,
-        status: true,
-        createdAt: true,
-      },
-    });
+    };
   }
 
   // Encuentra un acta y verifica que el usuario sea el dueño
