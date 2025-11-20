@@ -94,6 +94,7 @@ model TokenDenylist {
 // --- MODELO ACTUALIZADO PARA CUMPLIMIENTO (Soporte para "NO APLICA") ---
 model ActaCompliance {
   id        String    @id @default(uuid())
+  numeroCompliance String? @unique
   
   // --- Relación con el Usuario ---
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
