@@ -77,29 +77,28 @@ export class ActaComplianceService {
    * AHORA RECIBE LOS FILTROS
    */
   async findAllForUser(user: User, filterDto: GetComplianceFilterDto) {
-    const { search, page = 1, limit = 10 } = filterDto;
+    // 1. Extraemos 'status' para evitar el ReferenceError
+    const { search, status, page = 1, limit = 10 } = filterDto;
     const skip = (page - 1) * limit;
 
-    // Construcción del filtro dinámico
     const where: Prisma.ActaComplianceWhereInput = {
       userId: user.id,
     };
 
-    // Si hay término de búsqueda, busca en estos 3 campos
+    // 2. Filtro por Estatus (con corrección de tipo)
     if (status) {
-      where.status = status as ActaStatus;
+      where.status = status; 
     }
 
-    // ... lógica de search ...
+    // 3. Búsqueda EXCLUSIVA por Número de Compliance (Lo que tú pediste)
     if (search) {
-      where.OR = [
-        { nombre_organo_entidad: { contains: search, mode: 'insensitive' } },
-        { numeroCompliance: { contains: search, mode: 'insensitive' } },
-        { codigo_documento_revisado: { contains: search, mode: 'insensitive' } },
-      ];
+      where.numeroCompliance = {
+        contains: search,
+        mode: 'insensitive', // Para que encuentre mayúsculas/minúsculas
+      };
     }
 
-    // Ejecutamos transacción para obtener total y datos
+    // Ejecutamos la consulta
     const [total, data] = await this.prisma.$transaction([
       this.prisma.actaCompliance.count({ where }),
       this.prisma.actaCompliance.findMany({
@@ -107,7 +106,6 @@ export class ActaComplianceService {
         take: limit,
         skip: skip,
         orderBy: { createdAt: 'desc' },
-        // Seleccionamos campos relevantes para la tabla (opcional, optimiza la carga)
         select: {
           id: true,
           numeroCompliance: true,
@@ -115,13 +113,12 @@ export class ActaComplianceService {
           fecha_revision: true,
           puntajeCalculado: true,
           resumenCumplimiento: true,
+          status: true,
           createdAt: true,
-          // Puedes agregar más campos si los necesitas en el listado
         },
       }),
     ]);
 
-    // Retornamos estructura paginada estandarizada
     return {
       data,
       meta: {
