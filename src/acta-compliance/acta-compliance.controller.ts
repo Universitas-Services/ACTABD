@@ -12,25 +12,31 @@ import {
   ParseUUIDPipe,
   HttpStatus,
   Res,
-  Query, // 1. IMPORTAR QUERY
+  Query,
 } from '@nestjs/common';
-import { ActaComplianceService } from './acta-compliance.service';
-import { CreateActaComplianceDto } from './dto/create-acta-compliance.dto';
-import { UpdateActaComplianceDto } from './dto/update-acta-compliance.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { GetUser } from '../auth/decorators/get-user.decorator';
-import { User } from '@prisma/client';
-// 2. IMPORTAR EL DTO
-import { GetComplianceFilterDto } from './dto/get-compliance-filter.dto'; 
+import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
-  ApiParam,
 } from '@nestjs/swagger';
+import { User } from '@prisma/client';
+
+// Servicios
+import { ActaComplianceService } from './acta-compliance.service';
 import { EmailService } from '../email/email.service';
-import { Response } from 'express';
+import { AuditAiService } from '../audit/audit-ai.service'; // <--- 1. IMPORTAR SERVICIO IA
+
+// DTOs y Constantes
+import { CreateActaComplianceDto } from './dto/create-acta-compliance.dto';
+import { UpdateActaComplianceDto } from './dto/update-acta-compliance.dto';
+import { GetComplianceFilterDto } from './dto/get-compliance-filter.dto';
+import { FINDINGS_MAP } from './acta-compliance.constants'; // <--- 2. IMPORTAR MAPA DE PREGUNTAS
+import { ActaStatus } from '@prisma/client';
+// Guards y Decoradores
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GetUser } from '../auth/decorators/get-user.decorator';
 
 @ApiTags('Acta Compliance')
 @ApiBearerAuth()
@@ -40,11 +46,38 @@ export class ActaComplianceController {
   constructor(
     private readonly actaComplianceService: ActaComplianceService,
     private readonly emailService: EmailService,
+    private readonly auditAiService: AuditAiService, // <--- 3. INYECTAR AQUÍ
   ) {}
+
+  // --- 👇 NUEVO ENDPOINT PARA ANÁLISIS CON IA 👇 ---
+  @Post(':id/analisis-ia')
+  @ApiOperation({ summary: 'Generar análisis de riesgos con IA basado en leyes' })
+  @ApiResponse({ status: 200, description: 'Análisis generado correctamente.' })
+  async runAiAnalysis(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ) {
+    // 1. Buscamos el acta de compliance en la BD
+    const compliance = await this.actaComplianceService.findOneForUser(id, user);
+
+    // 2. Ejecutamos el análisis con el servicio de IA
+    // Le pasamos los datos (compliance) y el mapa de preguntas (FINDINGS_MAP)
+    // Hacemos un cast a 'any' o 'Record<string, any>' para que coincida con la firma del servicio genérico
+    const reporteAnalisis = await this.auditAiService.analyze(
+      compliance as unknown as Record<string, any>, 
+      FINDINGS_MAP
+    );
+
+    // 3. Devolvemos el reporte al frontend
+    return {
+      message: 'Análisis de Inteligencia Artificial completado.',
+      reporte: reporteAnalisis
+    };
+  }
+  // ------------------------------------------------------
 
   @Post()
   @ApiOperation({ summary: 'Crear un nuevo checklist de cumplimiento' })
-  // ... (Decoradores existentes)
   create(
     @Body() createActaComplianceDto: CreateActaComplianceDto,
     @GetUser() user: User,
@@ -52,7 +85,6 @@ export class ActaComplianceController {
     return this.actaComplianceService.create(createActaComplianceDto, user);
   }
 
-  // 👇 3. MÉTODO ACTUALIZADO
   @Get('my-checklists')
   @ApiOperation({
     summary: 'Obtener todos mis checklists (con paginación y filtros)',
@@ -63,13 +95,11 @@ export class ActaComplianceController {
   })
   findAllForUser(
     @GetUser() user: User,
-    @Query() filterDto: GetComplianceFilterDto, // Inyección de Query Params
+    @Query() filterDto: GetComplianceFilterDto,
   ) {
     return this.actaComplianceService.findAllForUser(user, filterDto);
   }
-  // 👆 ----------------------
 
-  // ... (El resto de métodos findOne, update, remove, download, email se quedan IGUAL)
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.actaComplianceService.findOneForUser(id, user);
@@ -98,10 +128,8 @@ export class ActaComplianceController {
     const reporte = await this.actaComplianceService.findOneForUser(id, user);
     if (!reporte) return;
     
-    // Generar buffer (usando tu servicio existente)
-    // NOTA: Asegúrate que el servicio tenga el método generatePdfBuffer completo
     const buffer = await this.actaComplianceService.generatePdfBuffer(id, user);
-
+    await this.actaComplianceService.updateStatus(id, ActaStatus.DESCARGADA);
     const fileName = `reporte-compliance-${
       reporte.codigo_documento_revisado || reporte.id
     }.pdf`;
@@ -116,8 +144,6 @@ export class ActaComplianceController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
   ) {
-    // ... (Tu lógica existente de email) ...
-    // Copia el contenido de tu controlador anterior para este método
      const reporte = await this.actaComplianceService.findOneForUser(id, user);
     if (!reporte) return;
     

@@ -13,13 +13,16 @@ import {
   HttpCode,
   HttpStatus,
   Res,
-  Query, // 1. Importamos Query
+  Query,
 } from '@nestjs/common';
 import { ActasService } from './actas.service';
 import { ActaDocxService } from './acta-docx.service';
+import { AuditAiService } from '../audit/audit-ai.service'; // <--- 1. IMPORTAR SERVICIO IA
+import { ACTAS_FINDINGS_MAP } from './actas.constants'; // <--- 2. IMPORTAR MAPA DE PREGUNTAS
+
 import { CreateActaDto } from '../auth/dto/create-acta.dto';
 import { UpdateActaDto } from '../auth/dto/update-acta.dto';
-import { GetActasFilterDto } from './dto/get-actas-filter.dto'; // 2. Importamos el DTO de filtros
+import { GetActasFilterDto } from './dto/get-actas-filter.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { User, ActaStatus } from '@prisma/client';
@@ -40,7 +43,34 @@ export class ActasController {
   constructor(
     private readonly actasService: ActasService,
     private readonly actaDocxService: ActaDocxService,
+    private readonly auditAiService: AuditAiService, // <--- 3. INYECTAR AQUÍ
   ) {}
+
+  // --- 👇 NUEVO ENDPOINT PARA ANÁLISIS CON IA EN ACTAS 👇 ---
+  @Post(':id/analisis-ia')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Analizar riesgos del Acta usando IA' })
+  @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  async analizarActa(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ) {
+    // 1. Obtener el acta
+    const acta = await this.actasService.findOneForUser(id, user);
+
+    // 2. Ejecutar análisis enviando el metadata (JSON) y el mapa de preguntas
+    // Hacemos cast a Record<string, any> porque metadata es Json en Prisma
+    const reporteAnalisis = await this.auditAiService.analyze(
+      acta.metadata as Record<string, any>,
+      ACTAS_FINDINGS_MAP,
+    );
+
+    return {
+      message: 'Análisis de Inteligencia Artificial completado.',
+      reporte: reporteAnalisis,
+    };
+  }
+  // ----------------------------------------------------------
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -53,19 +83,13 @@ export class ActasController {
     return this.actasService.create(createActaDto, user);
   }
 
-  // --- 3. MÉTODO ACTUALIZADO CON PAGINACIÓN Y FILTROS ---
   @Get()
   @ApiOperation({
     summary: 'Obtener todas las actas del usuario (con filtros y paginación)',
   })
-  findAll(
-    @GetUser() user: User,
-    @Query() filterDto: GetActasFilterDto, // Inyectamos los parámetros de la URL (page, limit, search, etc.)
-  ) {
-    // Pasamos los filtros al servicio
+  findAll(@GetUser() user: User, @Query() filterDto: GetActasFilterDto) {
     return this.actasService.findAllForUser(user, filterDto);
   }
-  // ------------------------------------------------------
 
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un acta específica por ID' })
@@ -93,8 +117,6 @@ export class ActasController {
   remove(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.actasService.remove(id, user);
   }
-
-  // --- ENDPOINTS DE DOCUMENTOS ---
 
   @Get(':id/descargar-docx')
   @ApiOperation({ summary: 'Genera y descarga el acta como un archivo .docx' })

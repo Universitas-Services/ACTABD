@@ -1,7 +1,11 @@
 // src/acta-compliance/entities/acta-compliance.entity.ts
 
 import { ApiProperty } from '@nestjs/swagger';
-import { ActaCompliance as ActaCompliancePrisma } from '@prisma/client';
+// 👇 1. IMPORTA EL ENUM 'ActaStatus'
+import {
+  ActaCompliance as ActaCompliancePrisma,
+  ActaStatus,
+} from '@prisma/client';
 import { RespuestaCompliance } from '../dto/create-acta-compliance.dto';
 
 export class ActaCompliance implements ActaCompliancePrisma {
@@ -18,6 +22,13 @@ export class ActaCompliance implements ActaCompliancePrisma {
     description: 'Número consecutivo de control',
   })
   numeroCompliance: string | null;
+
+  @ApiProperty({
+    enum: ActaStatus,
+    example: ActaStatus.GUARDADA,
+    description: 'Estatus del proceso de compliance',
+  })
+  status: ActaStatus;
   // ---------------------------------------------------------
 
   // --- Datos Generales ---

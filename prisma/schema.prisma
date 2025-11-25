@@ -95,7 +95,7 @@ model TokenDenylist {
 model ActaCompliance {
   id        String    @id @default(uuid())
   numeroCompliance String? @unique
-  
+  status    ActaStatus @default(GUARDADA)
   // --- Relación con el Usuario ---
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String

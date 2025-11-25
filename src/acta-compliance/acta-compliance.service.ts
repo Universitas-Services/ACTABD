@@ -12,6 +12,7 @@ import { Prisma, User } from '@prisma/client';
 import * as puppeteer from 'puppeteer';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ActaStatus } from '@prisma/client';
 // Importa los DTOs y el Enum
 import {
   CreateActaComplianceDto,
@@ -85,17 +86,16 @@ export class ActaComplianceService {
     };
 
     // Si hay término de búsqueda, busca en estos 3 campos
+    if (status) {
+      where.status = status as ActaStatus;
+    }
+
+    // ... lógica de search ...
     if (search) {
       where.OR = [
-        {
-          nombre_organo_entidad: { contains: search, mode: 'insensitive' },
-        },
-        {
-          numeroCompliance: { contains: search, mode: 'insensitive' },
-        },
-        {
-          codigo_documento_revisado: { contains: search, mode: 'insensitive' },
-        },
+        { nombre_organo_entidad: { contains: search, mode: 'insensitive' } },
+        { numeroCompliance: { contains: search, mode: 'insensitive' } },
+        { codigo_documento_revisado: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -131,6 +131,13 @@ export class ActaComplianceService {
         limit,
       },
     };
+  }
+
+  async updateStatus(id: string, status: ActaStatus) {
+    return this.prisma.actaCompliance.update({
+      where: { id },
+      data: { status },
+    });
   }
 
   /**
@@ -203,10 +210,12 @@ export class ActaComplianceService {
     let browser: puppeteer.Browser | undefined;
     try {
       browser = await puppeteer.launch({
+        // Si existe la variable de entorno (Docker), úsala. Si no (Local), usa la default.
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, 
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
+          '--disable-dev-shm-usage', // Importante para contenedores con poca memoria
         ],
         headless: true,
       });
