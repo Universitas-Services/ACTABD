@@ -14,6 +14,7 @@ import { TasksModule } from './tasks/tasks.module';
 //import { AdminModule } from './admin/admin.module';
 import { AdminModule } from './admin/admin.module';
 import { ActaComplianceModule } from './acta-compliance/acta-compliance.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -29,7 +30,9 @@ import { ActaComplianceModule } from './acta-compliance/acta-compliance.module';
     //AdminModule, // Añade AdminModule si existe
     TasksModule,
     AdminModule,
-    ActaComplianceModule, // <-- 4. Añade TasksModule
+    ActaComplianceModule,
+    AuditModule, // <-- 4. Añade TasksModule
+    AuditModule,
   ],
   controllers: [AppController],
   providers: [AppService],
