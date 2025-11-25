@@ -163,7 +163,7 @@ export class ActaComplianceController {
       user.nombre,
       reportDate,
     );
-    
+    await this.actaComplianceService.updateStatus(id, ActaStatus.ENVIADA);
     return { statusCode: HttpStatus.OK, message: 'Reporte enviado' };
   }
 }
