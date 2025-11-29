@@ -1,7 +1,6 @@
 // src/acta-compliance/entities/acta-compliance.entity.ts
 
 import { ApiProperty } from '@nestjs/swagger';
-// 👇 1. IMPORTA EL ENUM 'ActaStatus'
 import {
   ActaCompliance as ActaCompliancePrisma,
   ActaStatus,
@@ -15,7 +14,6 @@ export class ActaCompliance implements ActaCompliancePrisma {
   @ApiProperty({ example: 'uuid-user-id' })
   userId: string;
 
-  // 👇 AQUI ESTA LA CORRECCIÓN: Agregamos el campo que faltaba
   @ApiProperty({
     example: 'COMP-0001',
     nullable: true,
@@ -29,7 +27,6 @@ export class ActaCompliance implements ActaCompliancePrisma {
     description: 'Estatus del proceso de compliance',
   })
   status: ActaStatus;
-  // ---------------------------------------------------------
 
   // --- Datos Generales ---
   @ApiProperty({ required: false, nullable: true })
@@ -49,7 +46,7 @@ export class ActaCompliance implements ActaCompliancePrisma {
   @ApiProperty({ required: false, nullable: true })
   codigo_documento_revisado: string | null;
 
-  // --- Preguntas (Ejemplo genérico y mapeo completo) ---
+  // --- Preguntas ---
   @ApiProperty({ enum: RespuestaCompliance, nullable: true })
   q1_acta_contiene_lugar_suscripcion: string | null;
 
@@ -249,13 +246,23 @@ export class ActaCompliance implements ActaCompliancePrisma {
   @ApiProperty({ nullable: true })
   q98_incluye_relacion_ingresos_venta_terrenos: string | null;
 
-  // --- Resultados ---
+  // --- Resultados Calculados ---
   @ApiProperty({ example: 85.5, nullable: true })
   puntajeCalculado: number | null;
 
   @ApiProperty({ example: 'Nivel Bajo', nullable: true })
   resumenCumplimiento: string | null;
 
+  // 👇 CAMPO NUEVO PARA LA IA
+  @ApiProperty({
+    description: 'Reporte detallado generado por la IA (RAG)',
+    required: false,
+    nullable: true,
+  })
+  analisisIA: string | null;
+  // -----------------------
+
+  // Timestamps
   @ApiProperty()
   createdAt: Date;
 
