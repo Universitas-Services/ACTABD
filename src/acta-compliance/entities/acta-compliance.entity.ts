@@ -246,7 +246,7 @@ export class ActaCompliance implements ActaCompliancePrisma {
   @ApiProperty({ nullable: true })
   q98_incluye_relacion_ingresos_venta_terrenos: string | null;
 
-  // --- Resultados ---
+  // --- Resultados Calculados ---
   @ApiProperty({ example: 85.5, nullable: true })
   puntajeCalculado: number | null;
 
@@ -262,6 +262,7 @@ export class ActaCompliance implements ActaCompliancePrisma {
   analisisIA: string | null;
   // -----------------------
 
+  // Timestamps
   @ApiProperty()
   createdAt: Date;
 
