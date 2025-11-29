@@ -21,25 +21,25 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Ignora propiedades que no estén definidas en el DTO.
-      forbidNonWhitelisted: true, // Lanza un error si se envían propiedades no permitidas.
-      transform: true, // Transforma los datos de entrada a sus tipos de DTO (ej. string a number).
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
+
+  // 👇 CONFIGURACIÓN DE CORS ACTUALIZADA
   app.enableCors({
-    // En producción, deberías restringir esto a la URL de tu frontend
-    // Por ahora, '*' permitirá que Swagger funcione desde cualquier lugar.
-    origin: 'http://localhost:3001',
+    origin: [
+      'http://localhost:3001', // Para tus pruebas locales
+      'https://dev-actadeentrega.netlify.app', // Tu frontend desplegado en Netlify
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
-  // La línea `await app.listen(...)` fue eliminada de aquí.
 
-  // La única llamada a app.listen() se queda aquí, al final.
   await app.listen(process.env.PORT ?? 3000);
 }
 
-// 👇 Modificación aquí para manejar la promesa
 bootstrap().catch((err) => {
   console.error(err);
   process.exit(1);
