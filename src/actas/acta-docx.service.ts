@@ -19,240 +19,234 @@ interface AnexoInfo {
   text: string;
 }
 
-// Objeto que mapea las preguntas del formulario al texto completo de los Anexos
+// 🔥 CORRECCIÓN: Mapeo actualizado para coincidir con tu JSON (dispone...)
 const anexosMap: Record<string, AnexoInfo> = {
-  // --- ANEXO PRIMERO: Situación Presupuestaria, Financiera y Patrimonial (1-24) ---
-  q23_anexo_situacion_presupuestaria_detallada: {
+  // --- ANEXO PRIMERO: Situación Presupuestaria, Financiera y Patrimonial ---
+  disponeEstadoSituacionPresupuestaria: {
     key: 'Anexo_1',
     text: '-Estado de Situación Presupuestaria mostrando todos los momentos presupuestarios y sus detalles.',
   },
-  q24_anexo_gastos_comprometidos_no_causados: {
+  disponeRelacionGastosComprometidosNoCausados: {
     key: 'Anexo_2',
     text: '-Relación de Gastos Comprometidos, no causados a la fecha de entrega.',
   },
-  q25_anexo_gastos_causados_no_pagados: {
+  disponeRelacionGastosComprometidosCausadosNoPagados: {
     key: 'Anexo_3',
     text: '-Relación de Gastos Comprometidos, causados y no pagados a la fecha de entrega.',
   },
-  q26_anexo_estado_presupuestario_por_partidas: {
+  disponeEstadoPresupuestarioPorPartidas: {
     key: 'Anexo_4',
     text: '-Estado Presupuestario del Ejercicio vigente por partidas.',
   },
-  q27_anexo_estado_presupuestario_por_cuentas: {
+  disponeEstadoPresupuestarioDetalleCuentas: {
     key: 'Anexo_5',
     text: '-Estado Presupuestario del Ejercicio con los detalles de sus cuentas.',
   },
-  q28_anexo_estados_financieros: {
+  disponeEstadosFinancieros: {
     key: 'Anexo_6',
     text: '-Estados Financieros a la fecha de entrega.',
   },
-  q29_anexo_balance_comprobacion_y_notas: {
+  disponeBalanceComprobacion: {
     key: 'Anexo_7',
     text: '-Balance de Comprobación a la fecha de elaboración de los Estados Financieros y sus notas explicativas.',
   },
-  q30_anexo_estado_situacion_financiera_y_notas: {
+  disponeEstadoSituacionFinanciera: {
     key: 'Anexo_8',
     text: '-Estado de Situación Financiera / Balance General y sus notas explicativas.',
   },
-  q31_anexo_estado_rendimiento_financiero_y_notas: {
+  disponeEstadoRendimientoFinanciero: {
     key: 'Anexo_9',
     text: '-Estado de Rendimiento Financiero / Estado de Ganancia y Pérdidas y sus notas explicativas.',
   },
-  q32_anexo_estado_movimiento_patrimonio_y_notas: {
+  disponeEstadoMovimientosPatrimonio: {
     key: 'Anexo_10',
     text: '-Estado de Movimientos de las Cuentas de Patrimonio y sus notas explicativas.',
   },
-  q33_anexo_relacion_cuentas_por_cobrar: {
+  disponeRelacionCuentasPorCobrar: {
     key: 'Anexo_11',
     text: '-Relación de Cuentas por Cobrar a la fecha del Acta de Entrega.',
   },
-  q34_anexo_relacion_cuentas_por_pagar: {
+  disponeRelacionCuentasPorPagar: {
     key: 'Anexo_12',
     text: '-Relación de Cuentas por Pagar a la fecha del Acta de Entrega.',
   },
-  q35_anexo_relacion_fondos_terceros: {
+  disponeRelacionCuentasFondosTerceros: {
     key: 'Anexo_13',
     text: '-Relación de las Cuentas de los Fondos de Terceros.',
   },
-  q36_anexo_situacion_fondos_anticipo: {
+  disponeSituacionFondosAnticipo: {
     key: 'Anexo_14',
     text: '-Situación de los Fondos en Anticipo.',
   },
-  q37_anexo_situacion_caja_chica: {
+  disponeSituacionCajaChica: {
     key: 'Anexo_15',
     text: '-Situación de la Caja Chica.',
   },
-  q38_anexo_acta_arqueo_caja_chica: {
+  disponeActaArqueoCajasChicas: {
     key: 'Anexo_16',
     text: '-Acta de arqueo de las Cajas Chicas a la fecha de entrega.',
   },
-  q39_anexo_listado_registro_proveedores: {
+  disponeListadoRegistroAuxiliarProveedores: {
     key: 'Anexo_17',
     text: '-Listado del Registro Auxiliar de Proveedores.',
   },
-  q40_anexo_reporte_libros_contables: {
+  disponeReportesLibrosContables: {
     key: 'Anexo_18',
     text: '-Reportes de Libros Contables (Diario y mayores analíticos) a la fecha del cese.',
   },
-  q41_anexo_reporte_cuentas_bancarias: {
+  disponeReportesCuentasBancarias: {
     key: 'Anexo_19',
     text: '-Reportes de las Cuentas Bancarias (Movimientos a la fecha del cese de funciones).',
   },
-  q42_anexo_reporte_conciliaciones_bancarias: {
+  disponeReportesConciliacionesBancarias: {
     key: 'Anexo_20',
     text: '-Reportes de las Conciliaciones Bancarias a la fecha del cese de funciones.',
   },
-  q43_anexo_reporte_retenciones_pendientes: {
+  disponeReportesRetenciones: {
     key: 'Anexo_21',
     text: '-Reportes de Retenciones de pagos pendientes por enterar (ISLR, IVA y Contratos).',
   },
-  q44_anexo_reporte_contrataciones_publicas: {
+  disponeReporteProcesosContrataciones: {
     key: 'Anexo_22',
     text: '-Reporte de los Procesos de Contrataciones Públicas a la fecha del cese.',
   },
-  q45_anexo_reporte_fideicomiso_prestaciones: {
+  disponeReporteFideicomisoPrestaciones: {
     key: 'Anexo_23',
     text: '-Reporte del Fideicomiso de Prestaciones Sociales a la fecha del cese.',
   },
-  q46_anexo_reporte_bonos_vacacionales: {
+  disponeReporteBonosVacacionales: {
     key: 'Anexo_24',
     text: '-Reporte de Bonos Vacacionales a la fecha del cese de funciones.',
   },
 
-  // --- ANEXO SEGUNDO: Recursos Humanos (25-27) ---
-  q47_anexo_mencion_numero_cargos_rrhh: {
-    key: 'Anexo_25',
-    text: '-Mención del número de cargos existentes (empleados, obreros, fijos, contratados, jubilados).',
-  },
-  q48_incluye_cuadro_resumen_cargos: {
+  // --- ANEXO SEGUNDO: Recursos Humanos ---
+  // Mapeamos 'disponeCuadroResumenCargos' a Anexo_26 (Cuadro resumen).
+  // Si necesitas Anexo_25 (Mención de número de cargos), verifica si usas esa clave en el front.
+  disponeCuadroResumenCargos: {
     key: 'Anexo_26',
     text: '-Cuadro resumen indicando el número de cargos existentes y clasificación.',
   },
-  q50_anexo_reporte_nominas: {
+  disponeReporteNominas: {
     key: 'Anexo_27',
     text: '-Reporte de Nóminas a la fecha del cese de funciones.',
   },
-
-  // --- ANEXO TERCERO: Bienes (28) ---
-  q51_anexo_inventario_bienes: {
+  
+  // --- ANEXO TERCERO: Bienes ---
+  disponeInventarioBienes: {
     key: 'Anexo_28',
     text: '-Inventario de los Bienes Muebles e Inmuebles.',
   },
 
-  // --- ANEXO CUARTO: Plan Operativo (29-31) ---
-  q69_anexo_ejecucion_poa: {
+  // --- ANEXO CUARTO: Plan Operativo ---
+  disponeEjecucionPlanOperativo: {
     key: 'Anexo_29',
     text: '-Ejecución del Plan Operativo Anual de conformidad con objetivos y metas.',
   },
-  q70_incluye_ejecucion_poa_fecha_entrega: {
-    key: 'Anexo_30',
-    text: '-Ejecución del Plan Operativo a la fecha de entrega.',
-  },
-  q72_incluye_plan_operativo_anual: {
+  // Si tienes una clave específica para "fecha entrega POA", úsala aquí.
+  // Asumo que si hay ejecución, se incluye.
+  disponePlanOperativoAnual: {
     key: 'Anexo_31',
     text: '-Plan Operativo Anual.',
   },
 
-  // --- ANEXO QUINTO: Archivo (32-33) ---
-  q73_anexo_indice_general_archivo: {
-    key: 'Anexo_32',
-    text: '-Índice general del archivo.',
-  },
-  q74_archivo_indica_clasificacion: {
+  // --- ANEXO QUINTO: Archivo ---
+  // Tu JSON tiene 'disponeClasificacionArchivo'. El Anexo 33 es Clasificación.
+  disponeClasificacionArchivo: {
     key: 'Anexo_33',
     text: '-Documento con la clasificación del archivo.',
   },
+  // Si necesitas el índice (Anexo 32), agrega la clave correspondiente si la tienes.
 
-  // --- ANEXO SEXTO: Información Adicional y Tesorería (34-56) ---
-  q76_incluye_relacion_montos_fondos_asignados: {
+  // --- ANEXO SEXTO: Información Adicional y Tesorería ---
+  disponeRelacionMontosFondosAsignados: {
     key: 'Anexo_34',
     text: '-Relación de los montos de los fondos asignados.',
   },
-  q77_incluye_saldo_efectivo_fondos: {
+  disponeSaldoEfectivoFondos: {
     key: 'Anexo_35',
     text: '-Saldo en efectivo de los fondos asignados.',
   },
-  q78_incluye_relacion_bienes_asignados: {
+  disponeRelacionBienesAsignados: {
     key: 'Anexo_36',
     text: '-Relación de los bienes asignados.',
   },
-  q79_incluye_relacion_bienes_unidad_bienes: {
+  disponeRelacionBienesAsignadosUnidadBienes: {
     key: 'Anexo_37',
     text: '-Relación de los Bienes asignados emitida por la Unidad de Bienes.',
   },
-  q80_incluye_estados_bancarios_conciliados: {
+  disponeEstadosBancariosConciliados: {
     key: 'Anexo_38',
     text: '-Estados bancarios actualizados y conciliados a la fecha de entrega.',
   },
-  q81_incluye_lista_comprobantes_gastos: {
+  disponeListaComprobantesGastos: {
     key: 'Anexo_39',
     text: '-Lista de comprobantes de gastos.',
   },
-  q82_incluye_cheques_pendientes_cobro: {
+  disponeChequesEmitidosPendientesCobro: {
     key: 'Anexo_40',
     text: '-Cheques emitidos pendientes de cobro.',
   },
-  q83_incluye_reporte_transferencias_bancarias: {
+  disponeListadoTransferenciaBancaria: {
     key: 'Anexo_41',
     text: '-Listado o reporte de Transferencias Bancarias.',
   },
-  q84_anexo_caucion_funcionario_admin: {
+  disponeCaucionFuncionario: {
     key: 'Anexo_42',
     text: '-Caución del funcionario encargado de la Administración de los Recursos Financieros.',
   },
-  q85_incluye_cuadro_liquidado_recaudado: {
+  disponeCuadroDemostrativoRecaudado: {
     key: 'Anexo_43',
     text: '-Cuadro demostrativo de lo liquidado y recaudado, y derechos pendientes.',
   },
-  q86_incluye_relacion_expedientes_investigacion: {
+  disponeRelacionExpedientesAbiertos: {
     key: 'Anexo_44',
     text: '-Relación de expedientes abiertos por potestad de investigación o procedimientos administrativos.',
   },
-  q87_incluye_situacion_tesoro_nacional: {
+  disponeSituacionTesoroNacional: {
     key: 'Anexo_45',
     text: '-Situación del Tesoro Nacional.',
   },
-  q88_incluye_ejecucion_presupuesto_nacional: {
+  disponeInfoEjecucionPresupuestoNacional: {
     key: 'Anexo_46',
     text: '-Ejecución del presupuesto nacional de ingresos y egresos.',
   },
-  q89_incluye_monto_deuda_publica_nacional: {
+  disponeMontoDeudaPublicaNacional: {
     key: 'Anexo_47',
     text: '-Monto de la deuda pública nacional interna y externa.',
   },
-  q90_incluye_situacion_cuentas_nacion: {
+  disponeSituacionCuentasNacion: {
     key: 'Anexo_48',
     text: '-Situación de las cuentas de la Nación.',
   },
-  q91_incluye_situacion_tesoro_estadal: {
+  disponeSituacionTesoroEstadal: {
     key: 'Anexo_49',
     text: '-Situación del Tesoro Estadal.',
   },
-  q92_incluye_ejecucion_presupuesto_estadal: {
+  disponeInfoEjecucionPresupuestoEstadal: {
     key: 'Anexo_50',
     text: '-Ejecución del presupuesto estadal de ingresos y egresos.',
   },
-  q93_incluye_situacion_cuentas_estadal: {
+  disponeSituacionCuentasEstado: {
     key: 'Anexo_51',
     text: '-Situación de las cuentas del respectivo estado.',
   },
-  q94_incluye_situacion_tesoro_municipal: {
+  disponeSituacionTesoroDistritalMunicipal: {
     key: 'Anexo_52',
     text: '-Situación del Tesoro Distrital o Municipal.',
   },
-  q95_incluye_ejecucion_presupuesto_municipal: {
+  disponeInfoEjecucionPresupuestoDistritalMunicipal: {
     key: 'Anexo_53',
     text: '-Ejecución del presupuesto distrital o municipal.',
   },
-  q96_incluye_situacion_cuentas_municipal: {
+  disponeSituacionCuentasDistritalesMunicipales: {
     key: 'Anexo_54',
     text: '-Situación de las cuentas distritales o municipales.',
   },
-  q97_incluye_inventario_terrenos_municipales: {
+  disponeInventarioTerrenosEjidos: {
     key: 'Anexo_55',
     text: '-Inventario detallado de terrenos ejidos y propios distritales o municipales.',
   },
-  q98_incluye_relacion_ingresos_venta_terrenos: {
+  disponeRelacionIngresosVentaTerrenos: {
     key: 'Anexo_56',
     text: '-Relación de Ingresos por ventas de terrenos ejidos o propios.',
   },
@@ -262,23 +256,16 @@ const anexosMap: Record<string, AnexoInfo> = {
 export class ActaDocxService {
   constructor(private readonly emailService: EmailService) {}
 
-  /**
-   * Genera el .docx y lo devuelve como un Buffer (para descargar)
-   */
   async generarDocxBuffer(acta: Acta): Promise<Buffer> {
     try {
-      // 1. Obtener la plantilla HTML
       const htmlTemplate = this.obtenerPlantillaHtml(acta.type);
 
-      // 2. Rellenar la plantilla con la LÓGICA INTELIGENTE
+      // Aquí usamos la metadata tal cual viene de la BD
       const htmlContent = this.remplazarPlaceholders(
         htmlTemplate,
-        acta.metadata as Record<string, unknown>, // Pasa los datos crudos
+        acta.metadata as Record<string, unknown>,
       );
 
-      // --- ¡CORRECCIÓN 2: ERROR "unsafe-call"! ---
-      // Desactivamos la regla de ESLint solo para esta línea,
-      // porque sabemos que HTMLtoDOCX es una función.
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
       const fileBuffer = await HTMLtoDOCX(htmlContent, null, {
         table: { row: { cantSplit: true } },
@@ -293,32 +280,22 @@ export class ActaDocxService {
         `Raw error when generating DOCX for Acta ID ${actaId}:`,
         error,
       );
-
-      // Lógica simplificada que evita el error de ESLint
       if (error instanceof Error) {
         throw new InternalServerErrorException(
           `Error al generar el documento: ${error.message}`,
         );
       }
-
       throw new InternalServerErrorException(
         'Error al generar el documento: Ocurrió un error desconocido.',
       );
     }
   }
 
-  /**
-   * Genera el .docx y lo envía por email (para enviar)
-   */
   async generarYEnviarActa(acta: Acta, userEmail: string, userName: string) {
     try {
-      // 1. Generas el buffer
       const fileBuffer = await this.generarDocxBuffer(acta);
-
-      // 2. Preparas el nombre del archivo
       const filename = `Acta-Entrega-${acta.numeroActa}.docx`;
 
-      // 3. Pasamos los 4 argumentos
       await this.emailService.sendActaDocxAttachment(
         userEmail,
         fileBuffer,
@@ -331,59 +308,38 @@ export class ActaDocxService {
         `Raw error when generating and sending DOCX for Acta ID ${actaId}:`,
         error,
       );
-
-      // Lógica simplificada que evita el error de ESLint
       if (error instanceof Error) {
         throw new InternalServerErrorException(
           `Error al generar y enviar el documento: ${error.message}`,
         );
       }
-
       throw new InternalServerErrorException(
         'Error al generar y enviar el documento: Ocurrió un error desconocido.',
       );
     }
   }
 
-  /**
-   * Obtiene la plantilla HTML (sin cambios)
-   */
   private obtenerPlantillaHtml(tipoActa: ActaType): string {
     let templateName = '';
 
-    // --- ¡CORRECCIÓN 3: ERRORES DE CASOS DUPLICADOS! ---
-    // Limpié el 'switch' para que no haya 'case' repetidos.
     switch (tipoActa) {
-      // --- GRUPO ENTRANTE ---
       case ActaType.ENTRANTE_PAGA:
-        templateName = 'actaEntregaPaga.html';
-        break;
       case ActaType.ENTRANTE_GRATIS:
         templateName = 'actaEntregaPaga.html';
         break;
-
-      // --- GRUPO SALIENTE ---
       case ActaType.SALIENTE_PAGA:
-        templateName = 'actaSalientePaga.html';
-        break;
       case ActaType.SALIENTE_GRATIS:
         templateName = 'actaSalientePaga.html';
         break;
-
-      // --- GRUPO MÁXIMA AUTORIDAD ---
       case ActaType.MAXIMA_AUTORIDAD_PAGA:
-        templateName = 'actaMaximaAutoridadPaga.html';
-        break;
       case ActaType.MAXIMA_AUTORIDAD_GRATIS:
         templateName = 'actaMaximaAutoridadPaga.html';
         break;
-
       default:
         throw new NotFoundException(
           `Plantilla para el tipo de acta "${String(tipoActa)}" no encontrada.`,
         );
     }
-    // --- FIN CORRECCIÓN 3 ---
 
     const templatePath = path.join(__dirname, '..', 'templates', templateName);
     if (!fs.existsSync(templatePath)) {
@@ -394,35 +350,37 @@ export class ActaDocxService {
     return fs.readFileSync(templatePath, 'utf-8');
   }
 
-  /**
-   * Reemplaza los placeholders usando la LÓGICA COMPLETA de dos pasos de Express
-   */
   private remplazarPlaceholders(
     html: string,
-    rawData: Record<string, unknown>, // Datos crudos del 'metadata' (ej. { dispone...: "SI" })
+    rawData: Record<string, unknown>,
   ): string {
     let htmlContent = html;
-
-    // PASO 1: Pre-procesar los datos
+    
+    // PASO 1: Pre-procesar los datos (Lógica para Anexos)
     const processedData: Record<string, unknown> = { ...rawData };
 
-    for (const pregunta in anexosMap) {
-      if (Object.prototype.hasOwnProperty.call(anexosMap, pregunta)) {
-        const anexoInfo = anexosMap[pregunta];
+    // Iteramos sobre el mapa actualizado 'anexosMap'
+    for (const userKey in anexosMap) {
+      if (Object.prototype.hasOwnProperty.call(anexosMap, userKey)) {
+        const anexoInfo = anexosMap[userKey];
+        
+        // Buscamos el valor en la metadata usando la clave que viene del frontend (ej: disponeReporteNominas)
         const respuestaUsuario =
-          (rawData[pregunta] as string | undefined)?.toString() || '';
+          (rawData[userKey] as string | undefined)?.toString() || '';
 
+        // Lógica de "SI" / "NO" / "NO_APLICA"
         if (respuestaUsuario.toUpperCase() === 'SI') {
           processedData[anexoInfo.key] = anexoInfo.text;
         } else if (respuestaUsuario.toUpperCase() === 'NO') {
-          processedData[anexoInfo.key] = `FALTA: ${anexoInfo.text || pregunta}`;
+          processedData[anexoInfo.key] = `FALTA: ${anexoInfo.text || userKey}`;
         } else {
+          // Caso vacío o NO_APLICA
           processedData[anexoInfo.key] = '';
         }
       }
     }
 
-    // PASO 2: Eliminación de párrafos vacíos
+    // PASO 2: Eliminación de párrafos vacíos ({{Anexo_XX}})
     for (const key in processedData) {
       if (key.startsWith('Anexo_') && processedData[key] === '') {
         const regex = new RegExp(
@@ -433,12 +391,15 @@ export class ActaDocxService {
       }
     }
 
-    // PASO 3: Reemplazo final
+    // PASO 3: Reemplazo final de variables normales y anexos llenos
     for (const key in processedData) {
-      const placeholder = new RegExp(`{{${key}}}`, 'g');
+      // Evitamos procesar objetos anidados
       const value = processedData[key];
+      if (typeof value === 'object' && value !== null) continue;
 
-      let stringValue = ''; // Valor por defecto
+      const placeholder = new RegExp(`{{${key}}}`, 'g');
+      let stringValue = '';
+      
       if (
         typeof value === 'string' ||
         typeof value === 'number' ||
@@ -449,7 +410,7 @@ export class ActaDocxService {
       htmlContent = htmlContent.replace(placeholder, stringValue);
     }
 
-    // PASO 4: Limpieza final
+    // PASO 4: Limpieza final de placeholders residuales
     htmlContent = htmlContent.replace(/{{[^}]+}}/g, '');
 
     return htmlContent;

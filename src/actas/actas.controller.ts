@@ -15,17 +15,7 @@ import {
   Res,
   Query,
 } from '@nestjs/common';
-import { ActasService } from './actas.service';
-import { ActaDocxService } from './acta-docx.service';
-import { AuditAiService } from '../audit/audit-ai.service'; // <--- 1. IMPORTAR SERVICIO IA
-import { ACTAS_FINDINGS_MAP } from './actas.constants'; // <--- 2. IMPORTAR MAPA DE PREGUNTAS
-
-import { CreateActaDto } from '../auth/dto/create-acta.dto';
-import { UpdateActaDto } from '../auth/dto/update-acta.dto';
-import { GetActasFilterDto } from './dto/get-actas-filter.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { GetUser } from '../auth/decorators/get-user.decorator';
-import { User, ActaStatus } from '@prisma/client';
+import { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -33,7 +23,21 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
-import { Response } from 'express';
+import { User, ActaStatus } from '@prisma/client';
+
+// Servicios
+import { ActasService } from './actas.service';
+import { ActaDocxService } from './acta-docx.service';
+import { AuditAiService } from '../audit/audit-ai.service';
+import { ActaComplianceService } from '../acta-compliance/acta-compliance.service'; // <--- 1. IMPORTAR ESTE SERVICIO
+
+// DTOs y Guards
+import { CreateActaDto } from '../auth/dto/create-acta.dto';
+import { UpdateActaDto } from '../auth/dto/update-acta.dto';
+import { GetActasFilterDto } from './dto/get-actas-filter.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GetUser } from '../auth/decorators/get-user.decorator';
+import { ACTAS_FINDINGS_MAP } from './actas.constants';
 
 @ApiTags('Actas')
 @ApiBearerAuth()
@@ -43,10 +47,11 @@ export class ActasController {
   constructor(
     private readonly actasService: ActasService,
     private readonly actaDocxService: ActaDocxService,
-    private readonly auditAiService: AuditAiService, // <--- 3. INYECTAR AQUÍ
+    private readonly auditAiService: AuditAiService,
+    private readonly actaComplianceService: ActaComplianceService, // <--- 2. INYECTARLO AQUÍ
   ) {}
 
-  // --- 👇 NUEVO ENDPOINT PARA ANÁLISIS CON IA EN ACTAS 👇 ---
+  // --- ANÁLISIS IA ---
   @Post(':id/analisis-ia')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Analizar riesgos del Acta usando IA' })
@@ -55,11 +60,8 @@ export class ActasController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
   ) {
-    // 1. Obtener el acta
     const acta = await this.actasService.findOneForUser(id, user);
 
-    // 2. Ejecutar análisis enviando el metadata (JSON) y el mapa de preguntas
-    // Hacemos cast a Record<string, any> porque metadata es Json en Prisma
     const reporteAnalisis = await this.auditAiService.analyze(
       acta.metadata as Record<string, any>,
       ACTAS_FINDINGS_MAP,
@@ -70,7 +72,8 @@ export class ActasController {
       reporte: reporteAnalisis,
     };
   }
-  // ----------------------------------------------------------
+
+  // --- CRUD ACTAS ---
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -118,6 +121,8 @@ export class ActasController {
     return this.actasService.remove(id, user);
   }
 
+  // --- GENERACIÓN DE DOCUMENTOS (CORREGIDA) ---
+
   @Get(':id/descargar-docx')
   @ApiOperation({ summary: 'Genera y descarga el acta como un archivo .docx' })
   @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
@@ -126,8 +131,36 @@ export class ActasController {
     @GetUser() user: User,
     @Res() res: Response,
   ) {
+    // 1. Obtenemos el acta base
     const acta = await this.actasService.findOneForUser(id, user);
-    const buffer = await this.actaDocxService.generarDocxBuffer(acta);
+
+    // 2. LOGICA DE FUSIÓN: Traer datos del último compliance
+    // Buscamos el último checklist creado por el usuario
+    const complianceData = await this.actaComplianceService.findAllForUser(
+      user,
+      { limit: 1, page: 1 },
+    );
+
+    let metadataParaDoc = acta.metadata as Record<string, any>;
+
+    // Si existe un checklist, traemos sus detalles completos y mezclamos
+    if (complianceData.data && complianceData.data.length > 0) {
+      const ultimoCompliance = await this.actaComplianceService.findOneForUser(
+        complianceData.data[0].id,
+        user,
+      );
+
+      metadataParaDoc = {
+        ...ultimoCompliance, // Aquí vienen q1, q2... q98
+        ...metadataParaDoc, // El metadata del acta tiene prioridad si hay claves repetidas
+      };
+    }
+
+    // Creamos un objeto temporal fusionado para el generador
+    const actaFusionada = { ...acta, metadata: metadataParaDoc };
+
+    // 3. Generamos el documento con la data fusionada
+    const buffer = await this.actaDocxService.generarDocxBuffer(actaFusionada);
     await this.actasService.updateStatus(id, ActaStatus.DESCARGADA);
 
     const filename = `Acta-${acta.numeroActa}.docx`;
@@ -149,9 +182,33 @@ export class ActasController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
   ) {
+    // 1. Obtenemos el acta base
     const acta = await this.actasService.findOneForUser(id, user);
+
+    // 2. LOGICA DE FUSIÓN (Misma que arriba)
+    const complianceData = await this.actaComplianceService.findAllForUser(
+      user,
+      { limit: 1, page: 1 },
+    );
+
+    let metadataParaDoc = acta.metadata as Record<string, any>;
+
+    if (complianceData.data && complianceData.data.length > 0) {
+      const ultimoCompliance = await this.actaComplianceService.findOneForUser(
+        complianceData.data[0].id,
+        user,
+      );
+      metadataParaDoc = {
+        ...ultimoCompliance,
+        ...metadataParaDoc,
+      };
+    }
+
+    const actaFusionada = { ...acta, metadata: metadataParaDoc };
+
+    // 3. Enviamos el documento con la data fusionada
     await this.actaDocxService.generarYEnviarActa(
-      acta,
+      actaFusionada,
       user.email,
       user.nombre,
     );
