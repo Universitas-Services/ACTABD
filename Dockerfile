@@ -38,6 +38,8 @@ COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/prisma ./prisma
 
 COPY start.sh .
+# Fix Windows line endings (CRLF) -> Linux (LF)
+RUN apk add --no-cache dos2unix && dos2unix start.sh
 RUN chmod +x ./start.sh
 
 EXPOSE 3000

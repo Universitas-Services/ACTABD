@@ -33,6 +33,8 @@ export class ActasService {
       type: type,
     };
 
+    const isCompleted = this.checkMetadataCompletion(metadataCompleto);
+
     const nuevaActa = await this.prisma.acta.create({
       data: {
         numeroActa: numeroActa,
@@ -41,6 +43,7 @@ export class ActasService {
         status: ActaStatus.GUARDADA,
         userId: user.id,
         metadata: metadataCompleto,
+        isCompleted: isCompleted,
       },
     });
 
@@ -71,6 +74,14 @@ export class ActasService {
 
     // Formatea el nuevo número (ej: 6 se convierte en "ACTA-0006")
     return `ACTA-${nextNumber.toString().padStart(4, '0')}`;
+  }
+
+  private checkMetadataCompletion(metadata: any): boolean {
+    if (!metadata || typeof metadata !== 'object') {
+      return false;
+    }
+    // Cuenta las llaves del objeto JSON
+    return Object.keys(metadata as Record<string, any>).length >= 54;
   }
   // -----------------------------
 
@@ -118,6 +129,7 @@ export class ActasService {
           type: true,
           status: true,
           createdAt: true,
+          isCompleted: true, // Incluimos isCompleted en la respuesta
         },
       }),
     ]);
@@ -171,6 +183,7 @@ export class ActasService {
       }
 
       dataToUpdate.metadata = newMetadata;
+      dataToUpdate.isCompleted = this.checkMetadataCompletion(newMetadata);
     }
 
     return this.prisma.acta.update({

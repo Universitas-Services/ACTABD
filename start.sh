@@ -3,7 +3,10 @@ set -e
 
 echo "🚀 Iniciando despliegue..."
 
-# 1. Aplicar migraciones de BD (Estructura)
+# 1. Generar cliente y aplicar migraciones
+echo "🔄 Generando cliente Prisma..."
+npx prisma generate
+
 echo "📦 Ejecutando migraciones de Prisma..."
 npx prisma migrate deploy
 

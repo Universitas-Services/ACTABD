@@ -80,10 +80,13 @@ export class UsersService {
       throw new UnauthorizedException('La contraseña es incorrecta.');
     }
 
-    // 3. Si la contraseña es correcta, elimina al usuario
-    await this.prisma.user.delete({ where: { id } });
+    // 3. Si la contraseña es correcta, desactiva al usuario (Soft Delete)
+    await this.prisma.user.update({
+      where: { id },
+      data: { isActive: false },
+    });
 
-    return { message: 'La cuenta ha sido eliminada permanentemente.' };
+    return { message: 'La cuenta ha sido desactivada exitosamente.' };
   }
 
   async completeProfile(
