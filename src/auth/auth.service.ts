@@ -160,6 +160,12 @@ export class AuthService {
           'Por favor, confirma tu correo electrónico antes de iniciar sesión.',
         );
       }
+
+      // Verificar si la cuenta está activa (Soft Delete)
+      if (!user.isActive) {
+        console.warn(`[validateUser] Usuario ${email} está inactivo.`);
+        throw new UnauthorizedException('Su cuenta ha sido desactivada.');
+      }
       return JwtStrategy.excludePassword(user);
     }
     console.warn(`[validateUser] Credenciales inválidas para: ${email}`);

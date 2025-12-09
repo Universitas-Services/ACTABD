@@ -14,6 +14,7 @@ import {
   HttpStatus,
   Res,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import {
@@ -134,6 +135,16 @@ export class ActasController {
     // 1. Obtenemos el acta base
     const acta = await this.actasService.findOneForUser(id, user);
 
+    // --- NUEVA VALIDACIÓN ---
+    // Validamos que el acta tenga los datos mínimos requeridos
+    const actaConCompletion = acta as typeof acta & { isCompleted: boolean };
+    if (!actaConCompletion.isCompleted) {
+      throw new BadRequestException(
+        'El acta no cumple con los requisitos mínimos (54 datos) para ser descargada.',
+      );
+    }
+    // -------------------------
+
     // 2. LOGICA DE FUSIÓN: Traer datos del último compliance
     // Buscamos el último checklist creado por el usuario
     const complianceData = await this.actaComplianceService.findAllForUser(
@@ -184,6 +195,16 @@ export class ActasController {
   ) {
     // 1. Obtenemos el acta base
     const acta = await this.actasService.findOneForUser(id, user);
+
+    // --- NUEVA VALIDACIÓN ---
+    // Validamos que el acta tenga los datos mínimos requeridos
+    const actaConCompletion = acta as typeof acta & { isCompleted: boolean };
+    if (!actaConCompletion.isCompleted) {
+      throw new BadRequestException(
+        'El acta no cumple con los requisitos mínimos (54 datos) para ser enviada.',
+      );
+    }
+    // -------------------------
 
     // 2. LOGICA DE FUSIÓN (Misma que arriba)
     const complianceData = await this.actaComplianceService.findAllForUser(
