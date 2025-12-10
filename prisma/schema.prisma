@@ -20,9 +20,9 @@ enum UserRole {
 
 model User {
   id                String    @id @default(uuid())
-  email             String    @unique
-  password          String
-  nombre            String
+  email             String    @unique @default(cuid())
+  password          String    @default("123456")
+  nombre            String    @default("Usuario")
   apellido          String?
   role              UserRole  @default(USER)
   
