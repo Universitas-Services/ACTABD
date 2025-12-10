@@ -1,40 +1,47 @@
 # --- Etapa 1: Builder ---
-# Usamos una imagen de Node.js más completa para instalar y construir el proyecto.
 FROM node:20-alpine AS builder
 
-# Establecemos el directorio de trabajo dentro del contenedor
 WORKDIR /usr/src/app
 
-# Copiamos los archivos de dependencias
 COPY package*.json ./
 
-# Instalamos las dependencias de producción
+# Instalamos dependencias (incluyendo puppeteer)
 RUN npm install
 
-# Copiamos el resto del código fuente de la aplicación
 COPY . .
-
-# Generamos el cliente de Prisma (esencial para que funcione en el build)
 RUN npx prisma generate
 
-# Construimos la aplicación de NestJS (compila de TypeScript a JavaScript)
 RUN npm run build
 
 # --- Etapa 2: Deploy ---
-# Usamos una imagen de Node.js más ligera para la versión final
 FROM node:20-alpine
+
+# 👇 1. INSTALAMOS CHROMIUM Y SUS DEPENDENCIAS NECESARIAS
+RUN apk add --no-cache \
+      chromium \
+      nss \
+      freetype \
+      harfbuzz \
+      ca-certificates \
+      ttf-freefont
+
+# 👇 2. CONFIGURAMOS LA VARIABLE DE ENTORNO PARA PUPPETEER
+# Esto le dice a Puppeteer: "No busques tu versión descargada, usa la que acabo de instalar"
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 WORKDIR /usr/src/app
 
-# Copiamos las dependencias de producción desde la etapa 'builder'
+COPY --from=builder /usr/src/app/package*.json ./
 COPY --from=builder /usr/src/app/node_modules ./node_modules
-# Copiamos la aplicación ya compilada desde la etapa 'builder'
 COPY --from=builder /usr/src/app/dist ./dist
-# Copiamos el schema de Prisma para poder ejecutar migraciones en producción
 COPY --from=builder /usr/src/app/prisma ./prisma
 
-# Exponemos el puerto 3000 (el que usa NestJS por defecto)
+COPY start.sh .
+# Fix Windows line endings (CRLF) -> Linux (LF)
+RUN apk add --no-cache dos2unix && dos2unix start.sh
+RUN chmod +x ./start.sh
+
 EXPOSE 3000
 
-# El comando que se ejecutará cuando el contenedor se inicie
-CMD ["node", "dist/main"]
+CMD ["./start.sh"]

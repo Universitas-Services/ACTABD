@@ -11,27 +11,40 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum UserRole {
+  USER      // Usuario gratuito estándar
+  PAID_USER // Usuario pago (Pro)
+  ADMIN     // Administrador
+}
 // 3. --- Definición de tus Modelos (Tablas) ---
 
 model User {
   id                String    @id @default(uuid())
-  email             String    @unique
-  password          String
-  nombre            String
-  apellido          String? // El '?' significa que es opcional (puede ser NULL)
-  telefono          String?
-  role              String    @default("User")
-  isEmailVerified   Boolean   @default(false) @map("is_email_verified")
-  confirmationToken String?   @unique @map("confirmation_token")
-  otp               String?
-  otpExpiresAt      DateTime? @map("otp_expires_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
+  email             String    @unique @default(cuid())
+  password          String    @default("123456")
+  nombre            String    @default("Usuario")
+  apellido          String?
+  role              UserRole  @default(USER)
+  
+  // Auth & Verification
+  hashedRefreshToken String?
+  confirmationToken  String?   @unique
+  isEmailVerified    Boolean   @default(false)
+  isActive           Boolean   @default(true)
+  otp                String?
+  otpExpiresAt       DateTime?
+
+  telefono          String?   // AÑADIDO
+
+  createdAt         DateTime  @default(now()) @map("created_at") // AÑADIDO
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
-  profile     UserProfile?  // Un usuario puede tener un perfil
-  actas       Acta[]        // Un usuario puede tener muchas actas
+  profile     UserProfile? 
+  profileCompleted Boolean @default(false)
+  actas       Acta[]        // Actas generadas POR este usuario
   chatHistory ChatHistory[] // Un usuario puede tener muchos historiales de chat
+  complianceChecks ActaCompliance[] // <-- AÑADIDO: Revisiones de cumplimiento hechas por este usuario
 }
 
 model UserProfile {
@@ -44,22 +57,24 @@ model UserProfile {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String @unique // La llave foránea
 }
-
+enum ActaStatus {
+  GUARDADA
+  DESCARGADA
+  ENVIADA
+}
 model Acta {
-  id          String   @id @default(uuid())
-  numeroActa  String   @unique @map("numero_acta")
-  type        ActaType
-  nombreEntidad String @map("nombre_entidad")
-  ciudad      String
-  estado      String
-  fecha       DateTime
-  metadata    Json?    // Soporte nativo para JSON/JSONB
+  id            String       @id @default(uuid())
+  numeroActa    String?      @unique // Hecho opcional (?) para arreglar la migración
+  nombreEntidad String?      // Hecho opcional (?) para arreglar la migración
+  type          ActaType
+  status        ActaStatus   @default(GUARDADA)
+  metadata      Json
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @default(now()) @updatedAt // Añadido @default(now())
+  isCompleted   Boolean      @default(false)
 
-  // Relación muchos a uno con el usuario
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String
-
-  createdAt DateTime @default(now()) @map("created_at")
 }
 
 model ChatHistory {
@@ -79,6 +94,141 @@ model TokenDenylist {
   token  String   @db.Text
   expiry DateTime
 }
+
+
+// --- MODELO ACTUALIZADO PARA CUMPLIMIENTO (Soporte para "NO APLICA") ---
+model ActaCompliance {
+  id        String    @id @default(uuid())
+  numeroCompliance String? @unique
+  status    ActaStatus @default(GUARDADA)
+  // --- Relación con el Usuario ---
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+
+  // --- Datos Generales ---
+  correo_electronico        String?
+  rif_organo_entidad        String?
+  nombre_completo_revisor   String?
+  denominacion_cargo        String?
+  nombre_organo_entidad     String?
+  nombre_unidad_revisora    String?
+  fecha_revision            DateTime?
+  codigo_documento_revisado String?
+
+  // --- Preguntas de Cumplimiento ---
+  // CAMBIO REALIZADO: Tipo cambiado de Boolean? a String?
+  // Esto permite guardar valores como: "SI", "NO", "NO_APLICA"
+  
+  q1_acta_contiene_lugar_suscripcion         String? @map("q1_acta_contiene_lugar_suscripcion")
+  q2_acta_contiene_fecha_suscripcion         String? @map("q2_acta_contiene_fecha_suscripcion")
+  q3_acta_identifica_organo_entregado        String? @map("q3_acta_identifica_organo_entregado")
+  q4_acta_identifica_servidor_entrega        String? @map("q4_acta_identifica_servidor_entrega")
+  q5_acta_identifica_servidor_recibe         String? @map("q5_acta_identifica_servidor_recibe")
+  q6_acta_describe_motivo_entrega            String? @map("q6_acta_describe_motivo_entrega")
+  q7_acta_describe_fundamento_legal          String? @map("q7_acta_describe_fundamento_legal")
+  q8_acta_contiene_relacion_anexos_normas    String? @map("q8_acta_contiene_relacion_anexos_normas")
+  q9_acta_expresa_integracion_anexos         String? @map("q9_acta_expresa_integracion_anexos")
+  q10_acta_suscrita_por_quien_entrega        String? @map("q10_acta_suscrita_por_quien_entrega")
+  q11_acta_suscrita_por_quien_recibe         String? @map("q11_acta_suscrita_por_quien_recibe")
+  q12_anexa_informacion_adicional            String? @map("q12_anexa_informacion_adicional")
+  q13_anexos_con_fecha_corte_al_cese         String? @map("q13_anexos_con_fecha_corte_al_cese")
+  q14_acta_deja_constancia_inexistencia_info String? @map("q14_acta_deja_constancia_inexistencia_info")
+  q15_acta_especifica_errores_omisiones      String? @map("q15_acta_especifica_errores_omisiones")
+  q16_acta_elaborada_original_y_3_copias     String? @map("q16_acta_elaborada_original_y_3_copias")
+  q17_incluye_autorizacion_certificar_copias String? @map("q17_incluye_autorizacion_certificar_copias")
+  q18_original_archivado_despacho_autoridad  String? @map("q18_original_archivado_despacho_autoridad")
+  q19_copia_certificada_entregada_a_servidor_recibe String? @map("q19_copia_certificada_entregada_a_servidor_recibe")
+  q20_copia_certificada_entregada_a_servidor_entrega String? @map("q20_copia_certificada_entregada_a_servidor_entrega")
+  q21_copia_entregada_auditoria_interna_en_plazo String? @map("q21_copia_entregada_auditoria_interna_en_plazo")
+  q22_anexo_estado_cuentas_general             String? @map("q22_anexo_estado_cuentas_general")
+  q23_anexo_situacion_presupuestaria_detallada String? @map("q23_anexo_situacion_presupuestaria_detallada")
+  q24_anexo_gastos_comprometidos_no_causados   String? @map("q24_anexo_gastos_comprometidos_no_causados")
+  q25_anexo_gastos_causados_no_pagados         String? @map("q25_anexo_gastos_causados_no_pagados")
+  q26_anexo_estado_presupuestario_por_partidas String? @map("q26_anexo_estado_presupuestario_por_partidas")
+  q27_anexo_estado_presupuestario_por_cuentas  String? @map("q27_anexo_estado_presupuestario_por_cuentas")
+  q28_anexo_estados_financieros                String? @map("q28_anexo_estados_financieros")
+  q29_anexo_balance_comprobacion_y_notas       String? @map("q29_anexo_balance_comprobacion_y_notas")
+  q30_anexo_estado_situacion_financiera_y_notas String? @map("q30_anexo_estado_situacion_financiera_y_notas")
+  q31_anexo_estado_rendimiento_financiero_y_notas String? @map("q31_anexo_estado_rendimiento_financiero_y_notas")
+  q32_anexo_estado_movimiento_patrimonio_y_notas String? @map("q32_anexo_estado_movimiento_patrimonio_y_notas")
+  q33_anexo_relacion_cuentas_por_cobrar        String? @map("q33_anexo_relacion_cuentas_por_cobrar")
+  q34_anexo_relacion_cuentas_por_pagar         String? @map("q34_anexo_relacion_cuentas_por_pagar")
+  q35_anexo_relacion_fondos_terceros           String? @map("q35_anexo_relacion_fondos_terceros")
+  q36_anexo_situacion_fondos_anticipo          String? @map("q36_anexo_situacion_fondos_anticipo")
+  q37_anexo_situacion_caja_chica               String? @map("q37_anexo_situacion_caja_chica")
+  q38_anexo_acta_arqueo_caja_chica             String? @map("q38_anexo_acta_arqueo_caja_chica")
+  q39_anexo_listado_registro_proveedores       String? @map("q39_anexo_listado_registro_proveedores")
+  q40_anexo_reporte_libros_contables           String? @map("q40_anexo_reporte_libros_contables")
+  q41_anexo_reporte_cuentas_bancarias          String? @map("q41_anexo_reporte_cuentas_bancarias")
+  q42_anexo_reporte_conciliaciones_bancarias   String? @map("q42_anexo_reporte_conciliaciones_bancarias")
+  q43_anexo_reporte_retenciones_pendientes     String? @map("q43_anexo_reporte_retenciones_pendientes")
+  q44_anexo_reporte_contrataciones_publicas    String? @map("q44_anexo_reporte_contrataciones_publicas")
+  q45_anexo_reporte_fideicomiso_prestaciones   String? @map("q45_anexo_reporte_fideicomiso_prestaciones")
+  q46_anexo_reporte_bonos_vacacionales         String? @map("q46_anexo_reporte_bonos_vacacionales")
+  q47_anexo_mencion_numero_cargos_rrhh         String? @map("q47_anexo_mencion_numero_cargos_rrhh")
+  q48_incluye_cuadro_resumen_cargos            String? @map("q48_incluye_cuadro_resumen_cargos")
+  q49_cuadro_resumen_cargos_validado_rrhh      String? @map("q49_cuadro_resumen_cargos_validado_rrhh")
+  q50_anexo_reporte_nominas                    String? @map("q50_anexo_reporte_nominas")
+  q51_anexo_inventario_bienes                  String? @map("q51_anexo_inventario_bienes")
+  q52_inventario_bienes_fecha_entrega          String? @map("q52_inventario_bienes_fecha_entrega")
+  q53_inventario_bienes_comprobado_fisicamente String? @map("q53_inventario_bienes_comprobado_fisicamente")
+  q54_verificada_existencia_bienes_inventario  String? @map("q54_verificada_existencia_bienes_inventario")
+  q55_verificada_condicion_bienes_inventario   String? @map("q55_verificada_condicion_bienes_inventario")
+  q56_inventario_indica_responsable_patrimonial String? @map("q56_inventario_indica_responsable_patrimonial")
+  q57_inventario_indica_responsable_uso        String? @map("q57_inventario_indica_responsable_uso")
+  q58_inventario_indica_fecha_verificacion     String? @map("q58_inventario_indica_fecha_verificacion")
+  q59_inventario_indica_numero_acta_verificacion String? @map("q59_inventario_indica_numero_acta_verificacion")
+  q60_inventario_indica_numero_registro_bien   String? @map("q60_inventario_indica_numero_registro_bien")
+  q61_inventario_indica_codigo_bien            String? @map("q61_inventario_indica_codigo_bien")
+  q62_inventario_indica_descripcion_bien       String? @map("q62_inventario_indica_descripcion_bien")
+  q63_inventario_indica_marca_bien             String? @map("q63_inventario_indica_marca_bien")
+  q64_inventario_indica_modelo_bien            String? @map("q64_inventario_indica_modelo_bien")
+  q65_inventario_indica_serial_bien            String? @map("q65_inventario_indica_serial_bien")
+  q66_inventario_indica_estado_conservacion_bien String? @map("q66_inventario_indica_estado_conservacion_bien")
+  q67_inventario_indica_ubicacion_bien         String? @map("q67_inventario_indica_ubicacion_bien")
+  q68_inventario_indica_valor_mercado_bien     String? @map("q68_inventario_indica_valor_mercado_bien")
+  q69_anexo_ejecucion_poa                      String? @map("q69_anexo_ejecucion_poa")
+  q70_incluye_ejecucion_poa_fecha_entrega      String? @map("q70_incluye_ejecucion_poa_fecha_entrega")
+  q71_incluye_causas_incumplimiento_metas_poa  String? @map("q71_incluye_causas_incumplimiento_metas_poa")
+  q72_incluye_plan_operativo_anual             String? @map("q72_incluye_plan_operativo_anual")
+  q73_anexo_indice_general_archivo             String? @map("q73_anexo_indice_general_archivo")
+  q74_archivo_indica_clasificacion             String? @map("q74_archivo_indica_clasificacion")
+  q75_archivo_indica_ubicacion_fisica          String? @map("q75_archivo_indica_ubicacion_fisica")
+  q76_incluye_relacion_montos_fondos_asignados String? @map("q76_incluye_relacion_montos_fondos_asignados")
+  q77_incluye_saldo_efectivo_fondos            String? @map("q77_incluye_saldo_efectivo_fondos")
+  q78_incluye_relacion_bienes_asignados        String? @map("q78_incluye_relacion_bienes_asignados")
+  q79_incluye_relacion_bienes_unidad_bienes    String? @map("q79_incluye_relacion_bienes_unidad_bienes")
+  q80_incluye_estados_bancarios_conciliados    String? @map("q80_incluye_estados_bancarios_conciliados")
+  q81_incluye_lista_comprobantes_gastos        String? @map("q81_incluye_lista_comprobantes_gastos")
+  q82_incluye_cheques_pendientes_cobro         String? @map("q82_incluye_cheques_pendientes_cobro")
+  q83_incluye_reporte_transferencias_bancarias String? @map("q83_incluye_reporte_transferencias_bancarias")
+  q84_anexo_caucion_funcionario_admin          String? @map("q84_anexo_caucion_funcionario_admin")
+  q85_incluye_cuadro_liquidado_recaudado       String? @map("q85_incluye_cuadro_liquidado_recaudado")
+  q86_incluye_relacion_expedientes_investigacion String? @map("q86_incluye_relacion_expedientes_investigacion")
+  q87_incluye_situacion_tesoro_nacional        String? @map("q87_incluye_situacion_tesoro_nacional")
+  q88_incluye_ejecucion_presupuesto_nacional   String? @map("q88_incluye_ejecucion_presupuesto_nacional")
+  q89_incluye_monto_deuda_publica_nacional     String? @map("q89_incluye_monto_deuda_publica_nacional")
+  q90_incluye_situacion_cuentas_nacion         String? @map("q90_incluye_situacion_cuentas_nacion")
+  q91_incluye_situacion_tesoro_estadal         String? @map("q91_incluye_situacion_tesoro_estadal")
+  q92_incluye_ejecucion_presupuesto_estadal    String? @map("q92_incluye_ejecucion_presupuesto_estadal")
+  q93_incluye_situacion_cuentas_estadal        String? @map("q93_incluye_situacion_cuentas_estadal")
+  q94_incluye_situacion_tesoro_municipal       String? @map("q94_incluye_situacion_tesoro_municipal")
+  q95_incluye_ejecucion_presupuesto_municipal  String? @map("q95_incluye_ejecucion_presupuesto_municipal")
+  q96_incluye_situacion_cuentas_municipal      String? @map("q96_incluye_situacion_cuentas_municipal")
+  q97_incluye_inventario_terrenos_municipales  String? @map("q97_incluye_inventario_terrenos_municipales")
+  q98_incluye_relacion_ingresos_venta_terrenos String? @map("q98_incluye_relacion_ingresos_venta_terrenos")
+
+  // --- Resultados Calculados ---
+  puntajeCalculado    Float?   @map("puntaje_calculado")
+  resumenCumplimiento String?  @db.Text @map("resumen_cumplimiento")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("acta_compliance")
+}
+
 
 // Definición de tipos de acta
 enum ActaType {

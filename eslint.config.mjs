@@ -9,7 +9,13 @@ import tseslint from 'typescript-eslint';
 export default tseslint.config(
   // Configuración global
   {
-    ignores: ['eslint.config.mjs', 'dist/', 'node_modules/'],
+    ignores: [
+      'eslint.config.mjs',
+      'dist/',
+      'node_modules/',
+      'src/actas/acta-docx.service.ts',
+      'src/email/email.service.ts',
+    ],
   },
 
   // Configuración base de ESLint

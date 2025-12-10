@@ -6,10 +6,20 @@ import { UpdateUserDto } from '../auth/dto/update-user.dto';
 import { JwtStrategy } from '../auth/strategies/jwt.strategy';
 import { ChangePasswordDto } from '../auth/dto/change-password.dto';
 import { DeleteAccountDto } from '../auth/dto/delete-account.dto'; // Importa el nuevo DTO
-import * as bcrypt from 'bcryptjs';
+import { CompleteProfileDto } from '../auth/dto/complete-profile.dto';
+import * as bcrypt from 'bcrypt';
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
+
+  async findOneById(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        profile: true,
+      },
+    });
+  }
 
   async update(id: string, updateUserDto: UpdateUserDto) {
     // Llama a Prisma para actualizar el usuario en la base de datos
@@ -70,9 +80,55 @@ export class UsersService {
       throw new UnauthorizedException('La contraseña es incorrecta.');
     }
 
-    // 3. Si la contraseña es correcta, elimina al usuario
-    await this.prisma.user.delete({ where: { id } });
+    // 3. Si la contraseña es correcta, desactiva al usuario (Soft Delete)
+    await this.prisma.user.update({
+      where: { id },
+      data: { isActive: false },
+    });
 
-    return { message: 'La cuenta ha sido eliminada permanentemente.' };
+    return { message: 'La cuenta ha sido desactivada exitosamente.' };
+  }
+
+  async completeProfile(
+    userId: string,
+    completeProfileDto: CompleteProfileDto,
+  ) {
+    const { institucion, cargo, plazoEntregaActa } = completeProfileDto;
+
+    // Verifica si el usuario ya tiene un perfil
+    const profile = await this.prisma.$transaction(async (tx) => {
+      // 1. Usamos 'upsert' en lugar de 'create'.
+      // Esto soluciona el bucle: si el perfil ya existe (pero la bandera está mal),
+      // simplemente lo actualiza. Si no existe, lo crea.
+      const userProfile = await tx.userProfile.upsert({
+        where: { userId: userId },
+        update: {
+          // Qué hacer si SÍ existe
+          institucion,
+          cargo,
+          plazoEntregaActa,
+        },
+        create: {
+          // Qué hacer si NO existe
+          institucion,
+          cargo,
+          plazoEntregaActa,
+          userId: userId, // Conecta directamente con el ID del usuario
+        },
+      });
+
+      // 2. Actualizar el 'User' para poner la bandera en 'true'
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          profileCompleted: true, // <-- ¡La parte clave!
+        },
+      });
+
+      console.log(`[completeProfile] User ${userId}: Transacción completada.`);
+      return userProfile; // Devolvemos el perfil creado/actualizado
+    });
+
+    return profile;
   }
 }

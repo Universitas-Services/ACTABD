@@ -1,5 +1,4 @@
 // src/main.ts
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -22,13 +21,18 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true, // Ignora propiedades que no estén definidas en el DTO.
-      forbidNonWhitelisted: true, // Lanza un error si se envían propiedades no permitidas.
-      transform: true, // Transforma los datos de entrada a sus tipos de DTO (ej. string a number).
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
     }),
   );
+
+  // 👇 CONFIGURACIÓN DE CORS ACTUALIZADA
   app.enableCors({
-    //origin: 'https://la-url-de-tu-frontend.com', // ❗️ IMPORTANTE: Reemplaza esto con la URL real de tu frontend
+    origin: [
+      'http://localhost:3001', // Para tus pruebas locales
+      'https://dev-actadeentrega.netlify.app', // Tu frontend desplegado en Netlify
+    ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
@@ -36,7 +40,6 @@ async function bootstrap() {
   await app.listen(process.env.PORT ?? 3000);
 }
 
-// 👇 Modificación aquí para manejar la promesa
 bootstrap().catch((err) => {
   console.error(err);
   process.exit(1);

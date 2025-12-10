@@ -43,6 +43,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       );
     }
 
+    if (!user.isActive) {
+      throw new UnauthorizedException('Usuario inactivo.');
+    }
+
     // Usa su propio método estático para devolver el usuario limpio
     return JwtStrategy.excludePassword(user);
   }
