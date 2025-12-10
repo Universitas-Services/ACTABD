@@ -3,4 +3,10 @@
 import { PartialType } from '@nestjs/swagger';
 import { CreateActaDto } from './create-acta.dto';
 
-export class UpdateActaDto extends PartialType(CreateActaDto) {}
+import { IsDateString, IsOptional } from 'class-validator';
+
+export class UpdateActaDto extends PartialType(CreateActaDto) {
+  @IsOptional()
+  @IsDateString()
+  createdAt?: string; // Permitir editar fecha de creación
+}

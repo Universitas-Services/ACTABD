@@ -12,6 +12,12 @@ import { User, Acta, ActaStatus, Prisma } from '@prisma/client';
 import { ActaDocxService } from './acta-docx.service';
 import { GetActasFilterDto } from './dto/get-actas-filter.dto';
 
+// Tipo enriquecido para el retorno (intersection type)
+type EnrichedActa = Acta & {
+  diasRestantes?: number;
+  alertaVencimiento?: boolean;
+};
+
 @Injectable()
 export class ActasService {
   constructor(
@@ -20,7 +26,7 @@ export class ActasService {
   ) {}
 
   async create(createActaDto: CreateActaDto, user: User) {
-    const { type, nombreEntidad, metadata } = createActaDto;
+    const { type, nombreEntidad, metadata, tiempoRealizacion } = createActaDto;
 
     // 1. Generamos el número de acta con la lógica corregida (Último + 1)
     const numeroActa = await this.generarNumeroActa();
@@ -40,10 +46,11 @@ export class ActasService {
         numeroActa: numeroActa,
         nombreEntidad: nombreEntidad,
         type: type,
-        status: ActaStatus.GUARDADA,
+        status: isCompleted ? ActaStatus.COMPLETADA : ActaStatus.GUARDADA,
         userId: user.id,
         metadata: metadataCompleto,
         isCompleted: isCompleted,
+        tiempoRealizacion: tiempoRealizacion, // <-- Guardamos el tiempo
       },
     });
 
@@ -130,12 +137,27 @@ export class ActasService {
           status: true,
           createdAt: true,
           isCompleted: true, // Incluimos isCompleted en la respuesta
+          tiempoRealizacion: true, // <-- Necesario para el cálculo
         },
       }),
     ]);
 
+    // Mapeamos para calcular los días restantes en cada acta
+    const dataConDiasRestantes = data.map((acta) => {
+      // Necesitamos 'tiempoRealizacion' que no estaba en el select, así que lo añadimos al select abajo
+      // Ojo: Si usas 'select', Prisma solo devuelve eso. Hay que añadir 'tiempoRealizacion' al select.
+      const diasRestantes = this.calculateBusinessDaysRemaining(
+        acta.createdAt,
+        acta.tiempoRealizacion,
+      );
+
+      const alertaVencimiento = this.checkIfLate(acta);
+
+      return { ...acta, diasRestantes, alertaVencimiento };
+    });
+
     return {
-      data,
+      data: dataConDiasRestantes,
       meta: {
         total,
         page,
@@ -145,7 +167,7 @@ export class ActasService {
     };
   }
 
-  async findOneForUser(id: string, user: User): Promise<Acta> {
+  async findOneForUser(id: string, user: User): Promise<EnrichedActa> {
     const acta = await this.prisma.acta.findUnique({
       where: { id },
     });
@@ -154,21 +176,46 @@ export class ActasService {
       throw new NotFoundException('Acta no encontrada');
     }
     this.checkActaOwnership(acta, user.id);
-    return acta;
+
+    // Calcular días restantes para el detalle
+    const diasRestantes = this.calculateBusinessDaysRemaining(
+      acta.createdAt,
+      acta.tiempoRealizacion,
+    );
+
+    const alertaVencimiento = this.checkIfLate(acta);
+
+    return { ...acta, diasRestantes, alertaVencimiento };
   }
 
   async update(id: string, updateActaDto: UpdateActaDto, user: User) {
     const currentActa = await this.findOneForUser(id, user);
 
-    const { nombreEntidad, type, metadata } = updateActaDto;
+    // --- VALIDACIÓN DE BLOQUEO ---
+    if (currentActa.status === ActaStatus.ENTREGADA) {
+      throw new ForbiddenException(
+        'El acta está marcada como ENTREGADA y no se puede editar.',
+      );
+    }
+    // -----------------------------
+
+    const { nombreEntidad, type, metadata, tiempoRealizacion, createdAt } =
+      updateActaDto;
 
     const dataToUpdate: Prisma.ActaUpdateInput = {};
+
+    if (createdAt) {
+      dataToUpdate.createdAt = new Date(createdAt);
+    }
 
     if (nombreEntidad) {
       dataToUpdate.nombreEntidad = nombreEntidad;
     }
     if (type) {
       dataToUpdate.type = type;
+    }
+    if (tiempoRealizacion !== undefined) {
+      dataToUpdate.tiempoRealizacion = tiempoRealizacion;
     }
 
     if (metadata || nombreEntidad) {
@@ -183,7 +230,14 @@ export class ActasService {
       }
 
       dataToUpdate.metadata = newMetadata;
-      dataToUpdate.isCompleted = this.checkMetadataCompletion(newMetadata);
+
+      const isCompleted = this.checkMetadataCompletion(newMetadata);
+      dataToUpdate.isCompleted = isCompleted;
+
+      // Si se completa y su estado previo era GUARDADA, la pasamos a COMPLETADA
+      if (isCompleted && currentActa.status === ActaStatus.GUARDADA) {
+        dataToUpdate.status = ActaStatus.COMPLETADA;
+      }
     }
 
     return this.prisma.acta.update({
@@ -206,11 +260,112 @@ export class ActasService {
     });
   }
 
+  // MÉTODO PARA ENTREGAR ACTA (BLOQUEAR)
+  async entregarActa(id: string, user: User) {
+    const acta = await this.findOneForUser(id, user);
+
+    if (acta.status === ActaStatus.ENTREGADA) {
+      // Ya estaba entregada, no hacemos nada o lanzamos error (opcional)
+      return acta;
+    }
+
+    return this.prisma.acta.update({
+      where: { id },
+      data: { status: ActaStatus.ENTREGADA },
+    });
+  }
+
   private checkActaOwnership(acta: Acta, userId: string) {
     if (acta.userId !== userId) {
       throw new ForbiddenException(
         'No tienes permiso para acceder a esta acta',
       );
     }
+  }
+
+  // --- LÓGICA DE DÍAS HÁBILES ---
+
+  /**
+   * Calcula la fecha límite sumando días hábiles (L-V) a una fecha de inicio.
+   */
+  private addBusinessDays(startDate: Date, days: number): Date {
+    const currentDate = new Date(startDate);
+    let addedDays = 0;
+
+    while (addedDays < days) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      const dayOfWeek = currentDate.getDay(); // 0 = Domingo, 6 = Sábado
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        addedDays++;
+      }
+    }
+    return currentDate;
+  }
+
+  /**
+   * Calcula cuántos días hábiles faltan entre hoy y la fecha límite.
+   * Devuelve negativo si está vencido.
+   */
+  private calculateBusinessDaysRemaining(
+    createdAt: Date,
+    durationInDays: number,
+  ): number {
+    if (durationInDays <= 0) return 0; // Si no hay plazo, no hay cuenta regresiva
+
+    const deadline = this.addBusinessDays(createdAt, durationInDays);
+    const today = new Date();
+
+    // Normalizar fechas para ignorar horas (comparar solo la fecha calendario)
+    deadline.setHours(23, 59, 59, 999);
+    today.setHours(0, 0, 0, 0);
+
+    let daysRemaining = 0;
+    const current = new Date(today);
+
+    // Si hoy es igual al deadline, quedan 0 días (vence hoy)
+    if (current.getTime() > deadline.getTime()) {
+      // Caso VENCIDO: Calcular días pasados (como negativo)
+      // Nota: Implementación simple para indicar vencimiento.
+      // Podrías iterar hacia atrás para contar hábiles vencidos si fuera necesario.
+      return -1; // O lógica más compleja si quieres exactitud en días vencidos
+    }
+
+    // Caso NO VENCIDO: Contar hacia adelante
+    while (current < deadline) {
+      current.setDate(current.getDate() + 1);
+      const dayOfWeek = current.getDay();
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        daysRemaining++;
+      }
+    }
+
+    return daysRemaining;
+  }
+
+  /**
+   * Verifica si han pasado más de 4 días hábiles.
+   * Prioridad: metadata.fechaSuscripcion -> createdAt
+   */
+  private checkIfLate(acta: { createdAt: Date; metadata?: any }): boolean {
+    let startDate = new Date(acta.createdAt);
+
+    // Intentar leer fechaSuscripcion de metadata
+    const metadata = acta.metadata as Record<string, any>;
+    if (
+      metadata &&
+      metadata.fechaSuscripcion &&
+      typeof metadata.fechaSuscripcion === 'string'
+    ) {
+      const fechaSuscripcion = new Date(metadata.fechaSuscripcion);
+      if (!isNaN(fechaSuscripcion.getTime())) {
+        startDate = fechaSuscripcion;
+      }
+    }
+
+    const deadline = this.addBusinessDays(startDate, 4);
+    const today = new Date();
+
+    // Comparar timestamps
+    return today.getTime() > deadline.getTime();
   }
 }
