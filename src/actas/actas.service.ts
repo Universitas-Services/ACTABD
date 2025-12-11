@@ -138,6 +138,7 @@ export class ActasService {
           createdAt: true,
           isCompleted: true, // Incluimos isCompleted en la respuesta
           tiempoRealizacion: true, // <-- Necesario para el cálculo
+          metadata: true, // <-- Necesario para fechaSuscripcion
         },
       }),
     ]);
@@ -147,8 +148,8 @@ export class ActasService {
       // Necesitamos 'tiempoRealizacion' que no estaba en el select, así que lo añadimos al select abajo
       // Ojo: Si usas 'select', Prisma solo devuelve eso. Hay que añadir 'tiempoRealizacion' al select.
       const diasRestantes = this.calculateBusinessDaysRemaining(
-        acta.createdAt,
-        acta.tiempoRealizacion,
+        acta, // Pasamos el acta completa para extraer metadata
+        120, // NUEVO PLAZO: 120 días siempre
       );
 
       const alertaVencimiento = this.checkIfLate(acta);
@@ -179,8 +180,8 @@ export class ActasService {
 
     // Calcular días restantes para el detalle
     const diasRestantes = this.calculateBusinessDaysRemaining(
-      acta.createdAt,
-      acta.tiempoRealizacion,
+      acta,
+      120, // NUEVO PLAZO: 120 días
     );
 
     const alertaVencimiento = this.checkIfLate(acta);
@@ -228,6 +229,28 @@ export class ActasService {
         newMetadata.nombreEntidad = nombreEntidad;
         newMetadata.nombreOrgano = nombreEntidad;
       }
+
+      // --- LOGICA NUEVA PARA RESETEAR NOTIFICACIONES ---
+      // Si cambia la fecha de suscripción, debemos reiniciar el contador de notificaciones
+      // para que se vuelvan a enviar a los 30 y 100 días del nuevo plazo.
+      const oldMetadata = currentActa.metadata as Record<string, any>;
+      const newMetadataRecord = metadata as Record<string, any>;
+
+      const oldFecha = oldMetadata?.fechaSuscripcion as string | undefined;
+      const newFecha = newMetadataRecord?.fechaSuscripcion as
+        | string
+        | undefined;
+
+      // Si hay una nueva fecha y es diferente a la anterior (o no había)
+      if (newFecha && newFecha !== oldFecha) {
+        // Evitamos el error de 'unsafe member access' usando un tipo que incluya notificationsSent
+        (
+          dataToUpdate as Prisma.ActaUpdateInput & {
+            notificationsSent?: Prisma.InputJsonValue | null;
+          }
+        ).notificationsSent = Prisma.DbNull;
+      }
+      // -------------------------------------------------
 
       dataToUpdate.metadata = newMetadata;
 
@@ -305,14 +328,32 @@ export class ActasService {
   /**
    * Calcula cuántos días hábiles faltan entre hoy y la fecha límite.
    * Devuelve negativo si está vencido.
+   * BASE: fechaSuscripcion (metadata) o createdAt.
    */
-  private calculateBusinessDaysRemaining(
-    createdAt: Date,
+  public calculateBusinessDaysRemaining(
+    // Hice público para tests si fuera necesario
+    acta: { createdAt: Date; metadata: unknown },
     durationInDays: number,
   ): number {
-    if (durationInDays <= 0) return 0; // Si no hay plazo, no hay cuenta regresiva
+    if (durationInDays <= 0) return 0;
 
-    const deadline = this.addBusinessDays(createdAt, durationInDays);
+    let startDate = new Date(acta.createdAt);
+
+    if (
+      typeof acta.metadata === 'object' &&
+      acta.metadata !== null &&
+      'fechaSuscripcion' in acta.metadata
+    ) {
+      const metadata = acta.metadata as { fechaSuscripcion?: string };
+      if (metadata.fechaSuscripcion) {
+        const fechaSuscripcion = new Date(metadata.fechaSuscripcion);
+        if (!isNaN(fechaSuscripcion.getTime())) {
+          startDate = fechaSuscripcion;
+        }
+      }
+    }
+
+    const deadline = this.addBusinessDays(startDate, durationInDays);
     const today = new Date();
 
     // Normalizar fechas para ignorar horas (comparar solo la fecha calendario)
@@ -326,8 +367,7 @@ export class ActasService {
     if (current.getTime() > deadline.getTime()) {
       // Caso VENCIDO: Calcular días pasados (como negativo)
       // Nota: Implementación simple para indicar vencimiento.
-      // Podrías iterar hacia atrás para contar hábiles vencidos si fuera necesario.
-      return -1; // O lógica más compleja si quieres exactitud en días vencidos
+      return -1;
     }
 
     // Caso NO VENCIDO: Contar hacia adelante

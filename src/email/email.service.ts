@@ -108,4 +108,32 @@ export class EmailService {
 
     await this.resend.emails.send(emailOptions);
   }
+
+  /**
+   * NOTIFICACIÓN AL ADMIN: Plazos de entrega
+   */
+  async sendAdminNotificationDeadline(
+    to: string[],
+    actaNumero: string,
+    daysPassed: number,
+  ) {
+    if (!to || to.length === 0) return;
+
+    const subject = `ALERTA: Acta ${actaNumero} ha cumplido ${daysPassed} días hábiles`;
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2 style="color: #D32F2F;">Notificación de Plazo Vencido</h2>
+        <p>Estimado Administrador,</p>
+        <p>El Acta <strong>${actaNumero}</strong> ha cumplido <strong>${daysPassed} días hábiles</strong> desde su fecha de suscripción.</p>
+        <p>Por favor, tome las medidas pertinentes.</p>
+      </div>
+    `;
+
+    await this.resend.emails.send({
+      from: `Plataforma Actas <${this.fromEmail}>`,
+      to: to,
+      subject: subject,
+      html: htmlContent,
+    });
+  }
 }
