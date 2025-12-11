@@ -122,6 +122,16 @@ export class ActasController {
     return this.actasService.remove(id, user);
   }
 
+  @Patch(':id/entregar')
+  @ApiOperation({ summary: 'Marcar acta como ENTREGADA (Bloquea edición)' })
+  @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  async entregar(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ) {
+    return this.actasService.entregarActa(id, user);
+  }
+
   // --- GENERACIÓN DE DOCUMENTOS (CORREGIDA) ---
 
   @Get(':id/descargar-docx')
