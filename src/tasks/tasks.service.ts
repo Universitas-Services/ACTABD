@@ -4,7 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
-import { ActaStatus, UserRole } from '@prisma/client';
+import { ActaStatus, UserRole, Prisma } from '@prisma/client';
 
 @Injectable()
 export class TasksService {
@@ -150,7 +150,11 @@ export class TasksService {
         // pero aquí notifications es string[], Prisma lo acepta para Json.
         await this.prisma.acta.update({
           where: { id: acta.id },
-          data: { notificationsSent: notifications },
+          data: {
+            notificationsSent: notifications,
+          } as Prisma.ActaUpdateInput & {
+            notificationsSent: unknown;
+          },
         });
       }
     }

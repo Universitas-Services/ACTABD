@@ -243,12 +243,8 @@ export class ActasService {
 
       // Si hay una nueva fecha y es diferente a la anterior (o no había)
       if (newFecha && newFecha !== oldFecha) {
-        // Evitamos el error de 'unsafe member access' usando un tipo que incluya notificationsSent
-        (
-          dataToUpdate as Prisma.ActaUpdateInput & {
-            notificationsSent?: Prisma.InputJsonValue | null;
-          }
-        ).notificationsSent = Prisma.DbNull;
+        // Reiniciar notificaciones (se usa DbNull para limpiar campo JSON)
+        dataToUpdate.notificationsSent = Prisma.DbNull;
       }
       // -------------------------------------------------
 
