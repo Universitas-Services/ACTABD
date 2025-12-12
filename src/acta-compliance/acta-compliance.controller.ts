@@ -21,7 +21,9 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { User } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 // Servicios
 import { ActaComplianceService } from './acta-compliance.service';
@@ -47,7 +49,7 @@ export class ActaComplianceController {
     private readonly actaComplianceService: ActaComplianceService,
     private readonly emailService: EmailService,
     private readonly auditAiService: AuditAiService, // <--- 3. INYECTAR AQUÍ
-  ) {}
+  ) { }
 
   // --- 👇 NUEVO ENDPOINT PARA ANÁLISIS CON IA 👇 ---
   @Post(':id/analisis-ia')
@@ -64,7 +66,7 @@ export class ActaComplianceController {
     // Le pasamos los datos (compliance) y el mapa de preguntas (FINDINGS_MAP)
     // Hacemos un cast a 'any' o 'Record<string, any>' para que coincida con la firma del servicio genérico
     const reporteAnalisis = await this.auditAiService.analyze(
-      compliance as unknown as Record<string, any>, 
+      compliance as unknown as Record<string, any>,
       FINDINGS_MAP
     );
 
@@ -100,6 +102,26 @@ export class ActaComplianceController {
     return this.actaComplianceService.findAllForUser(user, filterDto);
   }
 
+  @Get('admin/all')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener TODAS las auditorías (ADMIN ONLY) con filtros',
+  })
+  findAllAdmin(@Query() filterDto: GetComplianceFilterDto) {
+    return this.actaComplianceService.findAll(filterDto);
+  }
+
+  @Get('admin/stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener estadísticas de auditorías (ADMIN ONLY)',
+  })
+  getStats() {
+    return this.actaComplianceService.getStats();
+  }
+
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.actaComplianceService.findOneForUser(id, user);
@@ -127,12 +149,11 @@ export class ActaComplianceController {
   ) {
     const reporte = await this.actaComplianceService.findOneForUser(id, user);
     if (!reporte) return;
-    
+
     const buffer = await this.actaComplianceService.generatePdfBuffer(id, user);
     await this.actaComplianceService.updateStatus(id, ActaStatus.DESCARGADA);
-    const fileName = `reporte-compliance-${
-      reporte.codigo_documento_revisado || reporte.id
-    }.pdf`;
+    const fileName = `reporte-compliance-${reporte.codigo_documento_revisado || reporte.id
+      }.pdf`;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -144,14 +165,13 @@ export class ActaComplianceController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
   ) {
-     const reporte = await this.actaComplianceService.findOneForUser(id, user);
+    const reporte = await this.actaComplianceService.findOneForUser(id, user);
     if (!reporte) return;
-    
+
     const buffer = await this.actaComplianceService.generatePdfBuffer(id, user);
 
-    const fileName = `reporte-${
-      reporte.codigo_documento_revisado || reporte.id
-    }.pdf`;
+    const fileName = `reporte-${reporte.codigo_documento_revisado || reporte.id
+      }.pdf`;
     const reportDate = new Date(
       reporte.fecha_revision || Date.now(),
     ).toLocaleDateString('es-ES');
