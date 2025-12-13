@@ -25,6 +25,6 @@ import { EmailModule } from '../email/email.module'; // Importa EmailModule
   ],
   controllers: [AuthController], // <-- AÑADE UNA COMA AQUÍ
   providers: [AuthService, JwtStrategy, RefreshTokenStrategy], // Esta es la línea que estabas añadiendo
-  exports: [JwtStrategy, PassportModule],
+  exports: [JwtStrategy, PassportModule, AuthService],
 })
 export class AuthModule {}

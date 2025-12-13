@@ -24,7 +24,9 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
-import { User, ActaStatus } from '@prisma/client';
+import { User, ActaStatus, UserRole } from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 // Servicios
 import { ActasService } from './actas.service';
@@ -93,6 +95,26 @@ export class ActasController {
   })
   findAll(@GetUser() user: User, @Query() filterDto: GetActasFilterDto) {
     return this.actasService.findAllForUser(user, filterDto);
+  }
+
+  @Get('admin/all')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener TODAS las actas (ADMIN ONLY) con filtros y paginación',
+  })
+  findAllAdmin(@Query() filterDto: GetActasFilterDto) {
+    return this.actasService.findAll(filterDto);
+  }
+
+  @Get('admin/stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener estadísticas de las actas (ADMIN ONLY)',
+  })
+  getStats() {
+    return this.actasService.getActasStats();
   }
 
   @Get(':id')

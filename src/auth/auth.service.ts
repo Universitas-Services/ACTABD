@@ -12,7 +12,7 @@ import * as bcrypt from 'bcrypt';
 import { CreateAuthDto } from './dto/create-auth.dto';
 import { JwtService } from '@nestjs/jwt';
 import { LoginDto } from './dto/login.dto';
-import { User } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import * as crypto from 'crypto';
 import { EmailService } from '../email/email.service';
@@ -235,7 +235,10 @@ export class AuthService {
    * Refresca los tokens (Access y Refresh) usando un Refresh Token válido del body.
    * Implementa la rotación de Refresh Tokens y detección de reutilización.
    */
-  async refreshTokens(refreshTokenFromRequest: string) {
+  async refreshTokens(
+    refreshTokenFromRequest: string,
+    requiredRole?: UserRole,
+  ) {
     // 1. Validar el token (firma y expiración)
     let payload: { sub: string };
     try {
@@ -270,6 +273,14 @@ export class AuthService {
         `[refreshTokens] User ${userId}: No encontrado o sin hash RT guardado. Rechazando. (RF1)`,
       );
       throw new ForbiddenException('Acceso denegado (RF1)');
+    }
+
+    // --- NUEVO: Verificación de rol opcional ---
+    if (requiredRole && user.role !== requiredRole) {
+      console.warn(
+        `[refreshTokens] User ${userId}: Rol incorrecto. Se requiere ${requiredRole}, pero tiene ${user.role}.`,
+      );
+      throw new ForbiddenException('Acceso denegado (Rol insuficiente)');
     }
 
     // Comparamos el hash del token recibido con el hash guardado en la BD.

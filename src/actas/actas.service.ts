@@ -168,6 +168,85 @@ export class ActasService {
     };
   }
 
+  // --- NUEVO MÉTODO PARA ADMIN (CON FILTROS) ---
+  async findAll(filterDto?: GetActasFilterDto) {
+    const {
+      search,
+      type,
+      status, // Añadido status también
+      page = 1,
+      limit = 10,
+    } = filterDto || {}; // Si no se pasa DTO, valores por defecto
+
+    const skip = (page - 1) * +limit;
+
+    const where: Prisma.ActaWhereInput = {};
+
+    if (type) where.type = type;
+    if (status) where.status = status;
+
+    if (search) {
+      where.OR = [
+        { nombreEntidad: { contains: search, mode: 'insensitive' } },
+        { numeroActa: { contains: search, mode: 'insensitive' } },
+        // Búsqueda por RIF dentro del JSON metadata
+        {
+          metadata: {
+            path: ['rif'],
+            string_contains: search,
+          },
+        },
+        // Intento alternativo por si la clave es diferente (ej. rifEntidad)
+        {
+          metadata: {
+            path: ['rifEntidad'],
+            string_contains: search,
+          },
+        },
+      ];
+    }
+
+    const [total, actas] = await this.prisma.$transaction([
+      this.prisma.acta.count({ where }),
+      this.prisma.acta.findMany({
+        where,
+        take: +limit,
+        skip,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    // 2. Calcular días restantes para cada una (opcional, si se requiere en admin)
+    const data = actas.map((acta) => {
+      const diasRestantes = this.calculateBusinessDaysRemaining(acta, 120);
+      const alertaVencimiento = this.checkIfLate(acta);
+      return {
+        ...acta,
+        diasRestantes,
+        alertaVencimiento,
+      };
+    });
+
+    return {
+      data,
+      meta: {
+        total,
+        page: +page,
+        lastPage: Math.ceil(total / +limit),
+        limit: +limit,
+      },
+    };
+  }
+
   async findOneForUser(id: string, user: User): Promise<EnrichedActa> {
     const acta = await this.prisma.acta.findUnique({
       where: { id },
@@ -403,5 +482,47 @@ export class ActasService {
 
     // Comparar timestamps
     return today.getTime() > deadline.getTime();
+  }
+  // --- REPORTES ADMIN ---
+
+  async getActasStats() {
+    // 1. Total absolute de actas
+    const totalActas = await this.prisma.acta.count();
+
+    // 2. Agrupación por status
+    const groupedStats = await this.prisma.acta.groupBy({
+      by: ['status'],
+      _count: {
+        status: true,
+      },
+    });
+
+    // 3. Inicializar todos los estados en 0 para asegurar estructura completa
+    const statsByStatus: Record<ActaStatus, number> = {
+      [ActaStatus.GUARDADA]: 0,
+      [ActaStatus.COMPLETADA]: 0,
+      [ActaStatus.ENTREGADA]: 0,
+      [ActaStatus.DESCARGADA]: 0,
+      [ActaStatus.ENVIADA]: 0,
+    };
+
+    // 4. Llenar con los datos reales de la BD
+    groupedStats.forEach((group) => {
+      if (statsByStatus[group.status] !== undefined) {
+        statsByStatus[group.status] = group._count.status;
+      }
+    });
+
+    // 5. Calcular métrica personalizada (GUARDADA + COMPLETADA + DESCARGADA)
+    const totalActasActivas =
+      statsByStatus[ActaStatus.GUARDADA] +
+      statsByStatus[ActaStatus.COMPLETADA] +
+      statsByStatus[ActaStatus.DESCARGADA];
+
+    return {
+      totalActas,
+      totalActasActivas,
+      statsByStatus,
+    };
   }
 }
