@@ -616,19 +616,19 @@ export class ActaComplianceService {
           <table class="header-table">
             <tr>
               <td>ENTE U ORGANISMO:</td>
-              <td>${createDto.nombre_organo_entidad || ''}</td>
+              <td>${createDto.nombre_organo_entidad || 'NO APLICA'}</td>
               <td>UNIDAD REVISORA:</td>
-              <td>${createDto.nombre_unidad_revisora || ''}</td>
+              <td>${createDto.nombre_unidad_revisora || 'NO APLICA'}</td>
             </tr>
             <tr>
               <td>CÓDIGO:</td>
-              <td>${createDto.codigo_documento_revisado || ''}</td>
+              <td>${createDto.codigo_documento_revisado || 'NO APLICA'}</td>
               <td>ELABORADO POR:</td>
-              <td>${createDto.nombre_completo_revisor || ''}</td>
+              <td>${createDto.nombre_completo_revisor || 'NO APLICA'}</td>
             </tr>
             <tr>
               <td>REVISADO POR:</td>
-              <td>${createDto.nombre_completo_revisor || ''}</td>
+              <td>${createDto.nombre_completo_revisor || 'NO APLICA'}</td>
               <td>FECHA:</td>
               <td>${new Date(
       createDto.fecha_revision || Date.now(),
@@ -663,8 +663,12 @@ export class ActaComplianceService {
       if (respuesta === RespuestaCompliance.SI) {
         cumpleText = 'SI';
         cumpleClass = 'cumple-si';
-      } else if (respuesta === RespuestaCompliance.NO_APLICA) {
-        cumpleText = 'N/A';
+      } else if (
+        respuesta === RespuestaCompliance.NO_APLICA ||
+        respuesta === null ||
+        respuesta === undefined
+      ) {
+        cumpleText = 'NO APLICA';
         cumpleClass = 'cumple-na';
       }
 
