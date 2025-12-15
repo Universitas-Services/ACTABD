@@ -393,9 +393,30 @@ export class ActaDocxService {
       }
     }
 
-    // PASO 2: Eliminación de párrafos vacíos ({{Anexo_XX}})
+    // --- LÓGICA MANUAL ADICIONAL (Anexo_VI, Anexo_VII, VER_ANEXO_7) ---
+
+    // 1. Anexo_VI: Si existe, se añade "<br>VER ANEXO"
+    const anexoVI = (rawData['Anexo_VI'] as string | undefined) || '';
+    if (anexoVI.trim()) {
+      processedData['Anexo_VI'] = `${anexoVI.trim()}<br>VER ANEXO`;
+    }
+
+    // 2. Anexo_VII y VER_ANEXO_7
+    const anexoVII = (rawData['Anexo_VII'] as string | undefined) || '';
+    if (anexoVII && anexoVII.trim().toLowerCase() !== 'no aplica') {
+      processedData['Anexo_VII'] = `<strong>Anexo Séptimo: Otros anexos del acta:</strong> ${anexoVII.trim()}`;
+      processedData['VER_ANEXO_7'] = 'VER ANEXO';
+    } else {
+      processedData['Anexo_VII'] = '';
+      processedData['VER_ANEXO_7'] = '';
+    }
+
+    // PASO 2: Eliminación de párrafos vacíos ({{Anexo_XX}} y {{VER_ANEXO_XX}})
     for (const key in processedData) {
-      if (key.startsWith('Anexo_') && processedData[key] === '') {
+      if (
+        (key.startsWith('Anexo_') || key.startsWith('VER_ANEXO_')) &&
+        processedData[key] === ''
+      ) {
         const regex = new RegExp(
           `<p[^>]*>\\s*{{${key}}}\\s*<\\/p>[\\r\\n]*`,
           'g',

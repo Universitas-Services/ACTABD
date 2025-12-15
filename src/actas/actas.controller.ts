@@ -24,7 +24,7 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
-import { User, ActaStatus, UserRole } from '@prisma/client';
+import { User, Acta, ActaStatus, UserRole } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
@@ -181,8 +181,16 @@ export class ActasController {
     @GetUser() user: User,
     @Res() res: Response,
   ) {
-    // 1. Obtenemos el acta base
-    const acta = await this.actasService.findOneForUser(id, user);
+    // 1. Obtenemos el acta base (Admin o User)
+    let acta: Acta;
+
+    if (user.role === UserRole.ADMIN) {
+      // Si es Admin, puede buscar cualquiera
+      acta = (await this.actasService.findOne(id)) as Acta;
+    } else {
+      // Si es User, solo las propias
+      acta = (await this.actasService.findOneForUser(id, user)) as Acta;
+    }
 
     // --- NUEVA VALIDACIÓN ---
     // Validamos que el acta tenga los datos mínimos requeridos
@@ -242,8 +250,13 @@ export class ActasController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
   ) {
-    // 1. Obtenemos el acta base
-    const acta = await this.actasService.findOneForUser(id, user);
+    // 1. Obtenemos el acta base (Admin o User)
+    let acta: Acta;
+    if (user.role === UserRole.ADMIN) {
+      acta = (await this.actasService.findOne(id)) as Acta;
+    } else {
+      acta = (await this.actasService.findOneForUser(id, user)) as Acta;
+    }
 
     // --- NUEVA VALIDACIÓN ---
     // Validamos que el acta tenga los datos mínimos requeridos
