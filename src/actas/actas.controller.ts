@@ -38,6 +38,7 @@ import { ActaComplianceService } from '../acta-compliance/acta-compliance.servic
 import { CreateActaDto } from '../auth/dto/create-acta.dto';
 import { UpdateActaDto } from '../auth/dto/update-acta.dto';
 import { GetActasFilterDto } from './dto/get-actas-filter.dto';
+import { ActaResponseDto } from './dto/actas-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { ACTAS_FINDINGS_MAP } from './actas.constants';
@@ -84,6 +85,7 @@ export class ActasController {
   @ApiResponse({
     status: 201,
     description: 'El acta ha sido creada exitosamente.',
+    type: ActaResponseDto,
   })
   create(@Body() createActaDto: CreateActaDto, @GetUser() user: User) {
     return this.actasService.create(createActaDto, user);
@@ -120,6 +122,11 @@ export class ActasController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un acta específica por ID' })
   @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Detalles del acta incluyendo campos calculados.',
+    type: ActaResponseDto,
+  })
   findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.actasService.findOneForUser(id, user);
   }
@@ -127,6 +134,11 @@ export class ActasController {
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un acta por ID' })
   @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Acta actualizada exitosamente.',
+    type: ActaResponseDto,
+  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateActaDto: UpdateActaDto,
@@ -147,6 +159,11 @@ export class ActasController {
   @Patch(':id/entregar')
   @ApiOperation({ summary: 'Marcar acta como ENTREGADA (Bloquea edición)' })
   @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Acta marcada como entregada.',
+    type: ActaResponseDto,
+  })
   async entregar(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
