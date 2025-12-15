@@ -123,14 +123,18 @@ const anexosMap: Record<string, AnexoInfo> = {
   // Mapeamos 'disponeCuadroResumenCargos' a Anexo_26 (Cuadro resumen).
   // Si necesitas Anexo_25 (Mención de número de cargos), verifica si usas esa clave en el front.
   disponeCuadroResumenCargos: {
-    key: 'Anexo_26',
+    key: 'Anexo_25',
     text: '-Cuadro resumen indicando el número de cargos existentes y clasificación.',
+  },
+  disponeCuadroResumenValidadoRRHH: {
+    key: 'Anexo_26',
+    text: '-Cuadro resumen validado por la Oficina de Recursos Humanos.',
   },
   disponeReporteNominas: {
     key: 'Anexo_27',
     text: '-Reporte de Nóminas a la fecha del cese de funciones.',
   },
-  
+
   // --- ANEXO TERCERO: Bienes ---
   disponeInventarioBienes: {
     key: 'Anexo_28',
@@ -140,8 +144,14 @@ const anexosMap: Record<string, AnexoInfo> = {
   // --- ANEXO CUARTO: Plan Operativo ---
   disponeEjecucionPlanOperativo: {
     key: 'Anexo_29',
-    text: '-Ejecución del Plan Operativo Anual de conformidad con objetivos y metas.',
+    text: '-Ejecución del Plan Operativo a la fecha de entrega.',
   },
+
+  incluyeCausasIncumplimientoMetas: {
+    key: 'Anexo_30',
+    text: '-Detalles de las causas que originaron el incumplimiento de algunas metas.',
+  },
+
   // Si tienes una clave específica para "fecha entrega POA", úsala aquí.
   // Asumo que si hay ejecución, se incluye.
   disponePlanOperativoAnual: {
@@ -152,11 +162,14 @@ const anexosMap: Record<string, AnexoInfo> = {
   // --- ANEXO QUINTO: Archivo ---
   // Tu JSON tiene 'disponeClasificacionArchivo'. El Anexo 33 es Clasificación.
   disponeClasificacionArchivo: {
-    key: 'Anexo_33',
+    key: 'Anexo_32',
     text: '-Documento con la clasificación del archivo.',
   },
   // Si necesitas el índice (Anexo 32), agrega la clave correspondiente si la tienes.
-
+  incluyeUbicacionFisicaArchivo: {
+    key: 'Anexo_33',
+    text: '-Indica ubicación física.',
+  },
   // --- ANEXO SEXTO: Información Adicional y Tesorería ---
   disponeRelacionMontosFondosAsignados: {
     key: 'Anexo_34',
@@ -254,7 +267,7 @@ const anexosMap: Record<string, AnexoInfo> = {
 
 @Injectable()
 export class ActaDocxService {
-  constructor(private readonly emailService: EmailService) {}
+  constructor(private readonly emailService: EmailService) { }
 
   async generarDocxBuffer(acta: Acta): Promise<Buffer> {
     try {
@@ -355,7 +368,7 @@ export class ActaDocxService {
     rawData: Record<string, unknown>,
   ): string {
     let htmlContent = html;
-    
+
     // PASO 1: Pre-procesar los datos (Lógica para Anexos)
     const processedData: Record<string, unknown> = { ...rawData };
 
@@ -363,7 +376,7 @@ export class ActaDocxService {
     for (const userKey in anexosMap) {
       if (Object.prototype.hasOwnProperty.call(anexosMap, userKey)) {
         const anexoInfo = anexosMap[userKey];
-        
+
         // Buscamos el valor en la metadata usando la clave que viene del frontend (ej: disponeReporteNominas)
         const respuestaUsuario =
           (rawData[userKey] as string | undefined)?.toString() || '';
@@ -399,7 +412,7 @@ export class ActaDocxService {
 
       const placeholder = new RegExp(`{{${key}}}`, 'g');
       let stringValue = '';
-      
+
       if (
         typeof value === 'string' ||
         typeof value === 'number' ||
