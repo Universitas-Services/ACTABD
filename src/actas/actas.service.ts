@@ -247,7 +247,7 @@ export class ActasService {
     };
   }
 
-  async findOneForUser(id: string, user: User): Promise<EnrichedActa> {
+  async findOne(id: string): Promise<EnrichedActa> {
     const acta = await this.prisma.acta.findUnique({
       where: { id },
     });
@@ -255,7 +255,6 @@ export class ActasService {
     if (!acta) {
       throw new NotFoundException('Acta no encontrada');
     }
-    this.checkActaOwnership(acta, user.id);
 
     // Calcular días restantes para el detalle
     const diasRestantes = this.calculateBusinessDaysRemaining(
@@ -266,6 +265,12 @@ export class ActasService {
     const alertaVencimiento = this.checkIfLate(acta);
 
     return { ...acta, diasRestantes, alertaVencimiento };
+  }
+
+  async findOneForUser(id: string, user: User): Promise<EnrichedActa> {
+    const acta = await this.findOne(id);
+    this.checkActaOwnership(acta, user.id);
+    return acta;
   }
 
   async update(id: string, updateActaDto: UpdateActaDto, user: User) {
