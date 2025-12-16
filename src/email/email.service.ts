@@ -21,7 +21,7 @@ export class EmailService {
   async sendConfirmationEmail(to: string, token: string, name: string) {
     const confirmationLink = `${this.configService.get<string>('FRONTEND_URL')}/verificar-email?token=${token}`;
 
-    const templatePath = path.join(process.cwd(), 'src/email/templates/confirmation-email.html');
+    const templatePath = path.join(__dirname, 'templates', 'confirmation-email.html');
     let htmlContent = fs.readFileSync(templatePath, 'utf8');
 
     htmlContent = htmlContent.replace(/{{userName}}/g, name);
