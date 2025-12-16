@@ -17,10 +17,14 @@ export class TasksService {
 
   // 👇 Este decorador define cuándo se ejecutará la tarea
   @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT) // Se ejecutará todos los días a medianoche
-  // También puedes usar expresiones cron directas: @Cron('0 0 * * *')
   async handleCron() {
-    await this.handleCleanUnverifiedUsers();
     await this.handleActaNotifications();
+  }
+
+  // 👇 Tarea separada para limpieza frecuente (cada minuto)
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleCronUserCleanup() {
+    await this.handleCleanUnverifiedUsers();
   }
 
   private async handleCleanUnverifiedUsers() {
@@ -28,15 +32,15 @@ export class TasksService {
       'Ejecutando tarea programada: Limpieza de usuarios no verificados...',
     );
 
-    // 1. Calcula la fecha límite (ej. usuarios creados hace más de 24 horas)
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    // 1. Calcula la fecha límite (usuarios creados hace más de 5 minutos)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
 
     // 2. Busca los usuarios que cumplen las condiciones
     const usersToDelete = await this.prisma.user.findMany({
       where: {
         isEmailVerified: false, // No han verificado su correo
         createdAt: {
-          lt: twentyFourHoursAgo, // Fueron creados antes de la fecha límite
+          lt: fiveMinutesAgo, // Fueron creados antes de hace 5 minutos
         },
       },
       select: {
