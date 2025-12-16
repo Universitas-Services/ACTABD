@@ -3,6 +3,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend, CreateEmailOptions } from 'resend';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class EmailService {
@@ -19,14 +21,16 @@ export class EmailService {
   async sendConfirmationEmail(to: string, token: string, name: string) {
     const confirmationLink = `${this.configService.get<string>('FRONTEND_URL')}/verificar-email?token=${token}`;
 
-    // (Tu lógica de leer la plantilla confirmation-email.html va aquí)
-    // ...
-    const htmlContent = `<p>Hola ${name}, haz clic <a href="${confirmationLink}">aquí</a> para confirmar tu correo.</p>`; // Simplificado
+    const templatePath = path.join(process.cwd(), 'src/email/templates/confirmation-email.html');
+    let htmlContent = fs.readFileSync(templatePath, 'utf8');
+
+    htmlContent = htmlContent.replace(/{{userName}}/g, name);
+    htmlContent = htmlContent.replace(/{{confirmationUrl}}/g, confirmationLink);
 
     await this.resend.emails.send({
-      from: `Plataforma Actas <${this.fromEmail}>`,
+      from: `Actas de Entrega <${this.fromEmail}>`,
       to: [to],
-      subject: 'Confirma tu dirección de correo electrónico',
+      subject: 'Confirma tu cuenta',
       html: htmlContent,
     });
   }

@@ -1,21 +1,55 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Confirmación de Correo Electrónico</title>
 </head>
-<body>
-  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-    <h2 style="color: #001A70; text-align: center;">¡Bienvenido a Universitas!</h2>
-    <p>¡Hola, <strong>{{userName}}</strong>!</p>
-    <p>Gracias por registrarte. Para activar tu cuenta, por favor haz clic en el botón de abajo.</p>
-    <div style="text-align: center; margin: 30px 0;">
-      <a href="{{confirmationUrl}}" style="background-color: #001A70; color: white; padding: 14px 28px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-        Activar mi Cuenta
+
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
+  <div
+    style="max-width: 600px; margin: 40px auto; background-color: #ffffff; padding: 40px; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+
+    <h2 style="color: #1a2b4b; text-align: center; font-size: 24px; margin-bottom: 30px; font-weight: bold;">Confirma tu
+      cuenta</h2>
+
+    <p style="color: #333333; font-size: 16px; line-height: 1.5;">¡Hola, {{userName}}!</p>
+
+    <p style="color: #333333; font-size: 16px; line-height: 1.5;">
+      Te damos la bienvenida a la aplicación de elaboración de Manuales de Contrataciones Públicas de Universitas.
+    </p>
+
+    <p style="color: #333333; font-size: 16px; line-height: 1.5;">
+      Para completar tu registro y asegurar tu cuenta, solo necesitas hacer clic en el siguiente botón:
+    </p>
+
+    <div style="text-align: center; margin: 35px 0;">
+      <a href="{{confirmationUrl}}"
+        style="background-color: #1a2b4b; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;">
+        Activar mi cuenta
       </a>
     </div>
-    <p style="font-size: 12px; color: #777;">Si el botón no funciona, copia y pega este enlace: {{confirmationUrl}}</p>
+
+    <p style="color: #666666; font-size: 12px; line-height: 1.5; text-align: center;">
+      Si el botón anterior no funciona, por favor copia y pega el siguiente enlace en tu navegador:<br>
+      <a href="{{confirmationUrl}}" style="color: #1a2b4b; word-break: break-all;">{{confirmationUrl}}</a>
+    </p>
+
+    <p style="color: #333333; font-size: 16px; line-height: 1.5; margin-top: 30px;">
+      Una vez que actives tu cuenta, podrás iniciar sesión y comenzar a elaborar tu manual express de forma gratuita.
+    </p>
+
+    <p style="color: #333333; font-size: 16px; line-height: 1.5;">
+      Si no creaste esta cuenta, por favor ignora este correo electrónico.
+    </p>
+
+    <p style="color: #333333; font-size: 16px; line-height: 1.5; margin-top: 30px;">
+      Saludos,<br>
+      El equipo de Universitas
+    </p>
+
   </div>
 </body>
+
 </html>
