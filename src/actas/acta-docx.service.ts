@@ -309,11 +309,40 @@ export class ActaDocxService {
       const fileBuffer = await this.generarDocxBuffer(acta);
       const filename = `Acta-Entrega-${acta.numeroActa}.docx`;
 
+      // LÓGICA PARA EL CÓDIGO DEL ACTA (M.A, S, E)
+      let prefix = '';
+      switch (acta.type) {
+        case ActaType.MAXIMA_AUTORIDAD_GRATIS:
+        case ActaType.MAXIMA_AUTORIDAD_PAGA:
+          prefix = 'M.A';
+          break;
+        case ActaType.SALIENTE_GRATIS:
+        case ActaType.SALIENTE_PAGA:
+          prefix = 'S';
+          break;
+        case ActaType.ENTRANTE_GRATIS:
+        case ActaType.ENTRANTE_PAGA:
+          prefix = 'E';
+          break;
+        default:
+          prefix = 'REF'; // Valor por defecto
+      }
+
+      const actaCode = `${prefix}-${acta.numeroActa}`;
+
+      // DETECTAR SI ES PRO
+      const isPro =
+        acta.type === ActaType.MAXIMA_AUTORIDAD_PAGA ||
+        acta.type === ActaType.SALIENTE_PAGA ||
+        acta.type === ActaType.ENTRANTE_PAGA;
+
       await this.emailService.sendActaDocxAttachment(
         userEmail,
         fileBuffer,
         filename,
         userName,
+        actaCode,
+        isPro,
       );
     } catch (error: unknown) {
       const actaId = acta?.id ?? 'ID no disponible';

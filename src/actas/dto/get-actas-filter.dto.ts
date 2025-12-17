@@ -41,4 +41,11 @@ export class GetActasFilterDto {
   @IsInt()
   @Min(1)
   limit?: number = 10;
+
+  @ApiPropertyOptional({
+    description: 'ID del usuario para filtrar (Solo Admin)',
+  })
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }

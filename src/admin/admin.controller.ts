@@ -9,6 +9,7 @@ import {
   HttpStatus,
   Param, // <-- Import Param
   Query, // <-- Import Query
+  Post,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -25,13 +26,24 @@ import {
 // --- ¡IMPORTA EL DTO DESDE SU ARCHIVO! ---
 import { UpdateUserRoleDto } from './dto/update-role.dto';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
+import { BulkDeleteUsersDto } from './dto/bulk-delete.dto';
+// Importa DTOs de Actas y Compliance
+import { GetActasFilterDto } from '../actas/dto/get-actas-filter.dto';
+import { GetComplianceFilterDto } from '../acta-compliance/dto/get-compliance-filter.dto';
+// Importa Servicios
+import { ActasService } from '../actas/actas.service';
+import { ActaComplianceService } from '../acta-compliance/acta-compliance.service';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly actasService: ActasService,
+    private readonly actaComplianceService: ActaComplianceService,
+  ) {}
 
   @Patch('users/role')
   @Roles(UserRole.ADMIN) // <-- Protegido solo para ADMINS
@@ -87,5 +99,48 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
   findOneUser(@Param('id') id: string) {
     return this.adminService.findOneUser(id);
+  }
+
+  @Post('users/bulk-delete')
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Eliminar (desactivar) masivamente usuarios por su ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Usuarios desactivados correctamente.',
+  })
+  @ApiResponse({ status: 403, description: 'Acceso denegado.' })
+  bulkDeleteUsers(@Body() bulkDeleteUsersDto: BulkDeleteUsersDto) {
+    return this.adminService.bulkDeleteUsers(bulkDeleteUsersDto.userIds);
+  }
+
+  // --- NUEVOS ENDPOINTS DE ESTADÍSTICAS POR USUARIO ---
+
+  @Get('users/:userId/actas')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener historial de Actas de un usuario específico',
+  })
+  findActasByUser(
+    @Param('userId') userId: string,
+    @Query() filterDto: GetActasFilterDto,
+  ) {
+    // Forzamos el userId en el filtro
+    return this.actasService.findAll({ ...filterDto, userId });
+  }
+
+  @Get('users/:userId/actas-compliance')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener historial de Compliance de un usuario específico',
+  })
+  findComplianceByUser(
+    @Param('userId') userId: string,
+    @Query() filterDto: GetComplianceFilterDto,
+  ) {
+    // Forzamos el userId en el filtro
+    return this.actaComplianceService.findAll({ ...filterDto, userId });
   }
 }
