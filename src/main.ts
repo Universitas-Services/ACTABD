@@ -30,8 +30,13 @@ async function bootstrap() {
   // 👇 CONFIGURACIÓN DE CORS ACTUALIZADA
   app.enableCors({
     origin: [
-      'http://localhost:3001', // Para tus pruebas locales
-      'https://dev-actadeentrega.netlify.app', // Tu frontend desplegado en Netlify
+      'http://localhost:3001',
+      'http://localhost:3000',
+      'https://dev-actadeentrega.netlify.app',
+      'https://dev-panel-admin.netlify.app',
+      'https://app.actadeentrega.site',
+      'https://admin.actadeentrega.site',
+      'https://app.actadeentrega.online',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
