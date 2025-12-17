@@ -174,6 +174,7 @@ export class ActasService {
       search,
       type,
       status, // Añadido status también
+      userId, // <-- Nuevo filtro
       page = 1,
       limit = 10,
     } = filterDto || {}; // Si no se pasa DTO, valores por defecto
@@ -182,6 +183,7 @@ export class ActasService {
 
     const where: Prisma.ActaWhereInput = {};
 
+    if (userId) where.userId = userId; // <-- Aplica filtro de usuario
     if (type) where.type = type;
     if (status) where.status = status;
 

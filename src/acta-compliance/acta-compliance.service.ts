@@ -134,10 +134,14 @@ export class ActaComplianceService {
    * Obtiene TODAS las auditorías (ADMIN) con filtros avanzados
    */
   async findAll(filterDto: GetComplianceFilterDto) {
-    const { search, status, page = 1, limit = 10 } = filterDto;
+    const { search, status, userId, page = 1, limit = 10 } = filterDto;
     const skip = (page - 1) * limit;
 
     const where: Prisma.ActaComplianceWhereInput = {};
+
+    if (userId) {
+      where.userId = userId; // <-- Aplica filtro de usuario
+    }
 
     if (status) {
       where.status = status;
@@ -307,12 +311,12 @@ export class ActaComplianceService {
         complianceData.fecha_revision || Date.now(),
       ).toLocaleDateString('es-VE');
 
-      await this.emailService.sendReportWithAttachment(
+      await this.emailService.sendComplianceReport(
         user.email,
         pdfBuffer,
         fileName,
-        user.nombre,
-        reportDate,
+        complianceData.numeroCompliance || 'S/N',
+        complianceData.puntajeCalculado || 0,
       );
 
       return {

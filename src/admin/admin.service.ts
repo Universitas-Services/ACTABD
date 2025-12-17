@@ -116,4 +116,25 @@ export class AdminService {
     const { password, ...result } = user;
     return result;
   }
+
+  // 7. Método de eliminación masiva (Soft Delete)
+  async bulkDeleteUsers(userIds: string[]) {
+    // Actualizamos 'isActive: false' para todos los IDs de la lista
+    const result = await this.prisma.user.updateMany({
+      where: {
+        id: {
+          in: userIds,
+        },
+      },
+      data: {
+        isActive: false,
+      },
+    });
+
+    return {
+      message: 'Proceso de eliminación masiva completado.',
+      totalRequested: userIds.length,
+      affectedCount: result.count,
+    };
+  }
 }
