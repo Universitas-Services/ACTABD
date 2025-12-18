@@ -141,6 +141,56 @@ export class ActaComplianceController {
     return this.actaComplianceService.remove(id, user);
   }
 
+  @Get('admin/:id/download')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminDownloadReport(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    const reporte = await this.actaComplianceService.findOneById(id);
+
+    const buffer = await this.actaComplianceService.generatePdfBufferAdmin(id);
+    await this.actaComplianceService.updateStatus(id, ActaStatus.DESCARGADA);
+
+    // Forzamos el tipado ANY para acceder a propiedades sin problemas
+    const reporteAny = reporte as any;
+    const fileName = `reporte-compliance-ADMIN-${reporteAny.codigo_documento_revisado || reporte.id}.pdf`;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.send(buffer);
+  }
+
+  @Post('admin/:id/email')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminEmailReport(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ) {
+    const reporte = await this.actaComplianceService.findOneById(id);
+    const buffer = await this.actaComplianceService.generatePdfBufferAdmin(id);
+
+    // Forzamos el tipado ANY
+    const reporteAny = reporte as any;
+    const fileName = `reporte-${reporteAny.codigo_documento_revisado || reporte.id}.pdf`;
+
+    // PRIORITY: Correo del registro > Correo del admin (Fallback)
+    const emailDestino = reporteAny.correo_electronico || user.email;
+
+    await this.emailService.sendComplianceReport(
+      emailDestino,
+      buffer,
+      fileName,
+      reporte.numeroCompliance || 'S/N',
+      reporte.puntajeCalculado || 0,
+    );
+
+    await this.actaComplianceService.updateStatus(id, ActaStatus.ENVIADA);
+    return { statusCode: HttpStatus.OK, message: 'Reporte enviado por Admin' };
+  }
+
   @Get(':id/download')
   async downloadReport(
     @Param('id', ParseUUIDPipe) id: string,

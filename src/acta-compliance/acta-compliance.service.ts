@@ -269,11 +269,40 @@ export class ActaComplianceService {
   // --- GENERACIÓN DE PDF ---
 
   /**
-   * Genera el buffer del PDF para un checklist específico
+   * Obtiene un checklist por ID (Sin verificar propiedad - USO INTERNO/ADMIN)
+   */
+  async findOneById(id: string) {
+    const compliance = await this.prisma.actaCompliance.findUnique({
+      where: { id },
+    });
+    if (!compliance) {
+      throw new NotFoundException('Registro de cumplimiento no encontrado.');
+    }
+    return compliance;
+  }
+
+  // --- GENERACIÓN DE PDF ---
+
+  /**
+   * Genera el buffer del PDF para un checklist específico (Usuario Normal)
    */
   async generatePdfBuffer(id: string, user: User): Promise<Buffer> {
     const complianceData = await this.findOneForUser(id, user);
+    return this._generatePdfFromData(complianceData);
+  }
 
+  /**
+   * Genera el buffer del PDF para un checklist específico (ADMIN)
+   */
+  async generatePdfBufferAdmin(id: string): Promise<Buffer> {
+    const complianceData = await this.findOneById(id);
+    return this._generatePdfFromData(complianceData);
+  }
+
+  /**
+   * Lógica interna para generar PDF desde datos
+   */
+  private async _generatePdfFromData(complianceData: any): Promise<Buffer> {
     const htmlContent = this.generateHtmlContent(
       complianceData as unknown as CreateActaComplianceDto,
       complianceData.puntajeCalculado ?? 0,
@@ -283,12 +312,11 @@ export class ActaComplianceService {
     let browser: puppeteer.Browser | undefined;
     try {
       browser = await puppeteer.launch({
-        // Si existe la variable de entorno (Docker), úsala. Si no (Local), usa la default.
         executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage', // Importante para contenedores con poca memoria
+          '--disable-dev-shm-usage',
         ],
         headless: true,
       });
