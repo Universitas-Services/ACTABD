@@ -34,6 +34,7 @@ import { AuditAiService } from '../audit/audit-ai.service'; // <--- 1. IMPORTAR 
 import { CreateActaComplianceDto } from './dto/create-acta-compliance.dto';
 import { UpdateActaComplianceDto } from './dto/update-acta-compliance.dto';
 import { GetComplianceFilterDto } from './dto/get-compliance-filter.dto';
+import { ActaComplianceAdminInfoResponseDto } from './dto/acta-compliance-admin-info-response.dto';
 import { FINDINGS_MAP } from './acta-compliance.constants'; // <--- 2. IMPORTAR MAPA DE PREGUNTAS
 import { ActaStatus } from '@prisma/client';
 // Guards y Decoradores
@@ -120,6 +121,21 @@ export class ActaComplianceController {
   })
   getStats() {
     return this.actaComplianceService.getStats();
+  }
+
+  @Get('admin/:id/info')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener información específica de cumplimiento formateada (ADMIN ONLY)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Información formateada de cumplimiento.',
+    type: ActaComplianceAdminInfoResponseDto,
+  })
+  getAdminInfo(@Param('id', ParseUUIDPipe) id: string) {
+    return this.actaComplianceService.getComplianceInfoForAdmin(id);
   }
 
   @Get(':id')

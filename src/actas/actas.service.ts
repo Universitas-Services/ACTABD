@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateActaDto } from '../auth/dto/create-acta.dto';
 import { UpdateActaDto } from '../auth/dto/update-acta.dto';
-import { User, Acta, ActaStatus, Prisma } from '@prisma/client';
+import { User, Acta, ActaStatus, Prisma, ActaType } from '@prisma/client';
 import { ActaDocxService } from './acta-docx.service';
 import { GetActasFilterDto } from './dto/get-actas-filter.dto';
 import { EmailService } from '../email/email.service';
@@ -551,6 +551,60 @@ export class ActasService {
       totalActas,
       totalActasActivas,
       statsByStatus,
+    };
+  }
+
+  async getActaInfoForAdmin(id: string) {
+    const acta = await this.prisma.acta.findUnique({
+      where: { id },
+    });
+
+    if (!acta) {
+      throw new NotFoundException('Acta no encontrada');
+    }
+
+    const metadata = acta.metadata as Record<string, any>;
+    const email =
+      (metadata.correo_electronico as string) ||
+      (metadata.email as string) ||
+      '';
+
+    // Estructura común
+    const baseInfo = {
+      email,
+    };
+
+    if (
+      acta.type === ActaType.SALIENTE_GRATIS ||
+      acta.type === ActaType.SALIENTE_PAGA
+    ) {
+      return {
+        ...baseInfo,
+        nombreServidorSaliente:
+          (metadata.nombreServidorSaliente as string) || '',
+        designacionServidorSaliente:
+          (metadata.designacionServidorSaliente as string) || '',
+        nombreServidorRecibe: (metadata.nombreServidorRecibe as string) || '',
+        designacionServidorRecibe:
+          (metadata.designacionServidorRecibe as string) || '',
+      };
+    }
+
+    // Para ENTRANTE y MAXIMA_AUTORIDAD el formato solicitado es similar
+    return {
+      ...baseInfo,
+      nombreServidorEntrante: (metadata.nombreServidorEntrante as string) || '',
+      designacionServidorEntrante:
+        (metadata.designacionServidorEntrante as string) || '',
+      nombreAuditor: (metadata.nombreAuditor as string) || '',
+      profesionAuditor: (metadata.profesionAuditor as string) || '',
+      nombreTestigo1: (metadata.nombreTestigo1 as string) || '',
+      profesionTestigo1: (metadata.profesionTestigo1 as string) || '',
+      nombreTestigo2: (metadata.nombreTestigo2 as string) || '',
+      profesionTestigo2: (metadata.profesionTestigo2 as string) || '',
+      nombreServidorSaliente: (metadata.nombreServidorSaliente as string) || '',
+      designacionServidorSaliente:
+        (metadata.designacionServidorSaliente as string) || '',
     };
   }
 }

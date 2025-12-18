@@ -823,4 +823,31 @@ export class ActaComplianceService {
       statsByStatus,
     };
   }
+  async getComplianceInfoForAdmin(id: string) {
+    const compliance = await this.prisma.actaCompliance.findUnique({
+      where: { id },
+      select: {
+        correo_electronico: true,
+        nombre_completo_revisor: true,
+        denominacion_cargo: true,
+        nombre_unidad_revisora: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!compliance) {
+      throw new NotFoundException('Registro de cumplimiento no encontrado.');
+    }
+
+    return {
+      email: compliance.correo_electronico || compliance.user.email,
+      nombreevaluador: compliance.nombre_completo_revisor,
+      denominacionCargo: compliance.denominacion_cargo,
+      nombreUnidad: compliance.nombre_unidad_revisora,
+    };
+  }
 }
