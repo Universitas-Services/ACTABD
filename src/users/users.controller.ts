@@ -9,11 +9,14 @@ import {
   Post,
   Delete,
   HttpStatus, // Importa HttpStatus
+  Param,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
-import type { User } from '@prisma/client';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { User, UserRole } from '@prisma/client';
 import { UpdateUserDto } from '../auth/dto/update-user.dto';
 import { ChangePasswordDto } from '../auth/dto/change-password.dto';
 import { DeleteAccountDto } from '../auth/dto/delete-account.dto';
@@ -131,5 +134,27 @@ export class UsersController {
     @Body() completeProfileDto: CompleteProfileDto,
   ) {
     return this.usersService.completeProfile(user.id, completeProfileDto);
+  }
+
+  @Delete('admin/:id')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Eliminar usuario por ID (Admin, Eliminación Pasiva)',
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'El usuario ha sido desactivado exitosamente.',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Usuario no encontrado.',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'Acceso denegado. Se requiere rol ADMIN.',
+  })
+  softDeleteUser(@Param('id') id: string) {
+    return this.usersService.softDeleteByAdmin(id);
   }
 }

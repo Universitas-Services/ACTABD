@@ -1,5 +1,5 @@
 // src/users/users.service.ts
-import { UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateUserDto } from '../auth/dto/update-user.dto';
@@ -130,5 +130,24 @@ export class UsersService {
     });
 
     return profile;
+  }
+
+  async softDeleteByAdmin(userId: string) {
+    // 1. Verificar que el usuario existe
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('Usuario no encontrado.');
+    }
+
+    // 2. Desactivar (Soft Delete)
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { isActive: false },
+    });
+
+    return {
+      message:
+        'El usuario ha sido desactivado exitosamente (Eliminación Pasiva).',
+    };
   }
 }
