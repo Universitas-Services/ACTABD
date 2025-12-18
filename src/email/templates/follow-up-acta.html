@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333333;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f9;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            background-color: #e74c3c;
+            color: #ffffff;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .highlight {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .warning-box {
+            background-color: #fff3f3;
+            border-left: 4px solid #e74c3c;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .button-container {
+            text-align: center;
+            margin: 30px 0;
+        }
+
+        .button {
+            background-color: #2c3e50;
+            color: #ffffff !important;
+            padding: 15px 25px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .footer {
+            background-color: #f9f9f9;
+            padding: 20px;
+            font-size: 12px;
+            color: #777777;
+            text-align: center;
+            border-top: 1px solid #eeeeee;
+        }
+
+        h2 {
+            color: #2c3e50;
+        }
+
+        ul {
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 style="margin:0; font-size: 20px;">⚠️ El tiempo corre: Protege tu carrera</h1>
+        </div>
+        <div class="content">
+            <p>Hola, <strong>{{userName}}</strong>:</p>
+
+            <p>En la gestión pública, la transparencia no es solo un valor, es una obligación legal que tiene un reloj
+                en marcha.</p>
+
+            <p>De acuerdo con el <strong>Artículo 4 de la Resolución N.º 01-00-0162 de la CGR</strong>, el proceso de
+                entrega formal debe materializarse en un plazo que no excederá de <span class="highlight">tres (3) días
+                    hábiles</span> contados a partir de la toma de posesión del cargo.</p>
+
+            <h2>¿Por qué es vital actuar ahora?</h2>
+            <p>No cumplir con este plazo o presentar un acta incompleta te expone a riesgos innecesarios que pueden
+                marcar tu historial profesional:</p>
+
+            <div class="warning-box">
+                <ul>
+                    <li>📌 <strong>Sanciones administrativas:</strong> Multas o procedimientos de determinación de
+                        responsabilidades según la Ley Orgánica de la Contraloría General de la República.</li>
+                    <li>📌 <strong>Vulnerabilidad legal:</strong> Sin un acta que delimite responsabilidades, quedas
+                        expuesto ante errores, deficiencias u omisiones que podrían atribuirse a tu gestión.</li>
+                    <li>📌 <strong>Daño a tu reputación:</strong> Tu integridad como servidor público depende de una
+                        rendición de cuentas oportuna y exacta.</li>
+                </ul>
+            </div>
+
+            <h2>Tu Acta de Entrega lista en minutos</h2>
+            <p>Ya tienes en tus manos la herramienta definitiva para cumplir con tu deber legal sin complicaciones.
+                Nuestra plataforma está lista para guiarte paso a paso, permitiéndote generar tu documento en solo
+                minutos y garantizando que el resultado final se ajuste estrictamente a los requerimientos de la
+                Resolución.</p>
+
+            <div class="warning-box" style="background-color: #e8f4fd; border-left-color: #3498db;">
+                <p>🚨 <strong>Recuerda:</strong> Te quedan aproximadamente <span class="highlight">{{daysRemaining}}
+                        días hábiles</span> para completar y formalizar tu acta.</p>
+            </div>
+
+            <h2>Asesoría y acompañamiento a tu medida</h2>
+            <p>Sabemos que pueden surgir dudas específicas según la naturaleza de tu cargo. Si necesitas despejar
+                inquietudes normativas al instante, cuentas con nuestro Consultor IA disponible en todo momento.</p>
+
+            <p>Para aquellos que buscan un nivel superior de seguridad, ofrecemos nuestro <strong>Servicio de
+                    Acompañamiento Premium</strong>.</p>
+
+            <p style="text-align: center; font-weight: bold; color: #27ae60;">¡Como cliente PRO, cuentas con un
+                descuento exclusivo del 50%!</p>
+
+            <div class="button-container">
+                <a href="https://universitas.myflodesk.com/ae-pro" class="button">SOLICITAR ASESORÍA ESPECIALIZADA (50%
+                    DESC)</a>
+            </div>
+
+            <p>¡No dejes tu tranquilidad para el último minuto!</p>
+            <p>🚨 El acta es tu mejor escudo legal y la prueba de una gestión transparente.</p>
+        </div>
+        <div class="footer">
+            <p>Este es un correo automático enviado por la Plataforma de Actas de Entrega.</p>
+            <p>&copy; 2025 Universitas Legal. Todos los derechos reservados.</p>
+        </div>
+    </div>
+</body>
+
+</html>
