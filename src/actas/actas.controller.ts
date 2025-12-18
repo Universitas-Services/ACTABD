@@ -24,7 +24,13 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
-import { User, Acta, ActaStatus, UserRole } from '@prisma/client';
+import {
+  User,
+  Acta,
+  ActaStatus,
+  UserRole,
+  ActaCompliance,
+} from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { RolesGuard } from '../auth/guards/roles.guard';
 
@@ -203,20 +209,39 @@ export class ActasController {
     // -------------------------
 
     // 2. LOGICA DE FUSIÓN: Traer datos del último compliance
-    // Buscamos el último checklist creado por el usuario
-    const complianceData = await this.actaComplianceService.findAllForUser(
-      user,
-      { limit: 1, page: 1 },
-    );
+    // Buscamos el último checklist creado por el usuario (OJO: Del dueño del acta, no necesariamente quien descarga)
+    let complianceData: { data: { id: string }[] };
+    if (user.role === UserRole.ADMIN) {
+      // Si es Admin, buscamos los compliance del dueño del acta
+      complianceData = await this.actaComplianceService.findAll({
+        userId: acta.userId,
+        limit: 1,
+        page: 1,
+      });
+    } else {
+      // Si es User, buscamos sus propios compliance
+      complianceData = await this.actaComplianceService.findAllForUser(user, {
+        limit: 1,
+        page: 1,
+      });
+    }
 
     let metadataParaDoc = acta.metadata as Record<string, any>;
 
     // Si existe un checklist, traemos sus detalles completos y mezclamos
     if (complianceData.data && complianceData.data.length > 0) {
-      const ultimoCompliance = await this.actaComplianceService.findOneForUser(
-        complianceData.data[0].id,
-        user,
-      );
+      let ultimoCompliance: ActaCompliance;
+      if (user.role === UserRole.ADMIN) {
+        // Admin usa búsqueda directa por ID (sin check de propiedad contra el user Admin)
+        ultimoCompliance = await this.actaComplianceService.findOneById(
+          complianceData.data[0].id,
+        );
+      } else {
+        ultimoCompliance = await this.actaComplianceService.findOneForUser(
+          complianceData.data[0].id,
+          user,
+        );
+      }
 
       metadataParaDoc = {
         ...ultimoCompliance, // Aquí vienen q1, q2... q98
@@ -269,18 +294,35 @@ export class ActasController {
     // -------------------------
 
     // 2. LOGICA DE FUSIÓN (Misma que arriba)
-    const complianceData = await this.actaComplianceService.findAllForUser(
-      user,
-      { limit: 1, page: 1 },
-    );
+    let complianceData: { data: { id: string }[] };
+    if (user.role === UserRole.ADMIN) {
+      complianceData = await this.actaComplianceService.findAll({
+        userId: acta.userId,
+        limit: 1,
+        page: 1,
+      });
+    } else {
+      complianceData = await this.actaComplianceService.findAllForUser(user, {
+        limit: 1,
+        page: 1,
+      });
+    }
 
     let metadataParaDoc = acta.metadata as Record<string, any>;
 
     if (complianceData.data && complianceData.data.length > 0) {
-      const ultimoCompliance = await this.actaComplianceService.findOneForUser(
-        complianceData.data[0].id,
-        user,
-      );
+      let ultimoCompliance: ActaCompliance;
+      if (user.role === UserRole.ADMIN) {
+        ultimoCompliance = await this.actaComplianceService.findOneById(
+          complianceData.data[0].id,
+        );
+      } else {
+        ultimoCompliance = await this.actaComplianceService.findOneForUser(
+          complianceData.data[0].id,
+          user,
+        );
+      }
+
       metadataParaDoc = {
         ...ultimoCompliance,
         ...metadataParaDoc,
