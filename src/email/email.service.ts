@@ -254,4 +254,46 @@ export class EmailService {
       html: htmlContent,
     });
   }
+
+  /**
+   * NOTIFICACIÓN AL USUARIO: Seguimiento tras guardar el acta por primera vez
+   */
+  async sendFollowUpActaEmail(
+    to: string,
+    userName: string,
+    daysRemaining: number,
+  ) {
+    const templatePath = path.join(
+      __dirname,
+      'templates',
+      'follow-up-acta.html',
+    );
+    let htmlContent = '';
+    const subject =
+      '⚠️ El tiempo corre: Protege tu carrera con tu Acta de Entrega lista en minutos';
+
+    try {
+      if (!fs.existsSync(templatePath)) {
+        console.error('¡LA PLANTILLA follow-up-acta.html NO EXISTE!');
+        htmlContent = `<p>Hola ${userName}, recuerda completar tu acta. Te quedan aprox. ${daysRemaining} días hábiles.</p>`;
+      } else {
+        htmlContent = fs.readFileSync(templatePath, 'utf8');
+        htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+        htmlContent = htmlContent.replace(
+          /{{daysRemaining}}/g,
+          daysRemaining.toString(),
+        );
+      }
+    } catch (error) {
+      console.error('ERROR LEYENDO PLANTILLA DE SEGUIMIENTO:', error);
+      htmlContent = `<p>Hola ${userName}, recuerda completar tu acta. Te quedan aprox. ${daysRemaining} días hábiles.</p>`;
+    }
+
+    await this.resend.emails.send({
+      from: `Universitas Legal <${this.fromEmail}>`,
+      to: [to],
+      subject: subject,
+      html: htmlContent,
+    });
+  }
 }

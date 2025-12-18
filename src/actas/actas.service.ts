@@ -11,6 +11,7 @@ import { UpdateActaDto } from '../auth/dto/update-acta.dto';
 import { User, Acta, ActaStatus, Prisma } from '@prisma/client';
 import { ActaDocxService } from './acta-docx.service';
 import { GetActasFilterDto } from './dto/get-actas-filter.dto';
+import { EmailService } from '../email/email.service';
 
 // Tipo enriquecido para el retorno (intersection type)
 type EnrichedActa = Acta & {
@@ -23,6 +24,7 @@ export class ActasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly actaDocxService: ActaDocxService,
+    private readonly emailService: EmailService,
   ) {}
 
   async create(createActaDto: CreateActaDto, user: User) {
@@ -53,6 +55,25 @@ export class ActasService {
         tiempoRealizacion: tiempoRealizacion, // <-- Guardamos el tiempo
       },
     });
+
+    // Enviar correo de seguimiento personalizado tras el primer guardado
+    // Según Resolución N.º 01-00-0162, el plazo es de 3 días hábiles.
+    try {
+      // Calculamos los días restantes considerando un plazo legal de 3 días hábiles
+      const daysRemaining = this.calculateBusinessDaysRemaining(
+        nuevaActa,
+        3, // Plazo legal Resolución CGR
+      );
+
+      // El correo se envía de forma asíncrona sin bloquear la respuesta
+      this.emailService
+        .sendFollowUpActaEmail(user.email, user.nombre, daysRemaining)
+        .catch((err) =>
+          console.error('Error enviando email de seguimiento:', err),
+        );
+    } catch (error) {
+      console.error('Error calculando días para email de seguimiento:', error);
+    }
 
     return nuevaActa;
   }
