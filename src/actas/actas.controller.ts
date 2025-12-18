@@ -291,8 +291,13 @@ export class ActasController {
 
     // 3. Enviamos el documento con la data fusionada
     // PRIORITY: Correo de la metadata > Correo del usuario
-    const emailDestino =
-      (metadataParaDoc.correo_electronico as string) || user.email;
+    // PRIORITY: Correo de la metadata > Correo del usuario (Fallback)
+    // Buscamos 'correo_electronico' O 'email' en la metadata
+    const actaEmail =
+      (metadataParaDoc.correo_electronico as string) ||
+      (metadataParaDoc.email as string);
+
+    const emailDestino = actaEmail || user.email;
 
     await this.actaDocxService.generarYEnviarActa(
       actaFusionada,
