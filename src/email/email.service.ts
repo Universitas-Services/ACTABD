@@ -214,7 +214,7 @@ export class EmailService {
     }
 
     await this.resend.emails.send({
-      from: `Universitas Legal <${this.fromEmail}>`,
+      from: `Actas de Entrega <${this.fromEmail}>`,
       to: [to],
       subject: subject,
       html: htmlContent,
@@ -290,7 +290,43 @@ export class EmailService {
     }
 
     await this.resend.emails.send({
-      from: `Universitas Legal <${this.fromEmail}>`,
+      from: `Actas de Entrega <${this.fromEmail}>`,
+      to: [to],
+      subject: subject,
+      html: htmlContent,
+    });
+  }
+
+  /**
+   * NOTIFICACIÓN AL USUARIO: Plazo de realización vencido
+   */
+  async sendActaDeadlineExpiredEmail(to: string, userName: string) {
+    const templatePath = path.join(
+      __dirname,
+      'templates',
+      'acta-deadline-expired.html',
+    );
+    let htmlContent = '';
+    const subject =
+      '🚨 URGENTE: El plazo de 3 días ha vencido. Instrucciones para la entrega inmediata de tu Acta.';
+
+    try {
+      if (!fs.existsSync(templatePath)) {
+        console.error(
+          '¡LA PLANTILLA acta-deadline-expired.html NO EXISTE!',
+        );
+        htmlContent = `<p>Estimado ${userName}, su plazo para realizar el acta ha vencido. Por favor, finalice el proceso urgentemente.</p>`;
+      } else {
+        htmlContent = fs.readFileSync(templatePath, 'utf8');
+        htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+      }
+    } catch (error) {
+      console.error('ERROR LEYENDO PLANTILLA DE VENCIMIENTO:', error);
+      htmlContent = `<p>Estimado ${userName}, su plazo para realizar el acta ha vencido. Por favor, finalice el proceso urgentemente.</p>`;
+    }
+
+    await this.resend.emails.send({
+      from: `Actas de Entrega <${this.fromEmail}>`,
       to: [to],
       subject: subject,
       html: htmlContent,

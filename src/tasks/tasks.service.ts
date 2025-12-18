@@ -75,13 +75,18 @@ export class TasksService {
   // --- NUEVA TAREA DE NOTIFICACIONES ---
   private async handleActaNotifications() {
     this.logger.log(
-      'Verificando plazos de actas entregadas (30 y 100 días)...',
+      'Iniciando verificación de notificaciones (Plazos y Vencimientos)...',
     );
 
-    // 1. Obtener actas entregadas o completadas, o simplemente todas las que tengan fechaSuscripcion
-    // Como la regla es fechaSuscripcion, buscamos actas que no estén "borradas" (aunque no hay soft delete aqui)
-    // Filtramos las que tengan status ENTREGADA para ser estrictos, o cualquier status si aplica.
-    // Usaremos ENTREGADA como criterio base según requerimiento inicial.
+    // --- 1. NOTIFICACIONES AL ADMIN (30 y 100 días) ---
+    await this.handleAdminNotifications();
+
+    // --- 2. NOTIFICACIONES AL USUARIO (Vencimiento de Plazo) ---
+    await this.handleUserDeadlineNotifications();
+  }
+
+  // Lógica separada para notificaciones de Admin (existente)
+  private async handleAdminNotifications() {
     const actas = await this.prisma.acta.findMany({
       where: {
         status: ActaStatus.ENTREGADA,
@@ -97,22 +102,16 @@ export class TasksService {
 
     if (actas.length === 0) return;
 
-    // 2. Obtener correos de administradores
     const admins = await this.prisma.user.findMany({
       where: { role: UserRole.ADMIN },
       select: { email: true },
     });
     const adminEmails = admins.map((a) => a.email);
 
-    if (adminEmails.length === 0) {
-      this.logger.warn('No hay administradores a quienes notificar.');
-      return;
-    }
+    if (adminEmails.length === 0) return;
 
     for (const acta of actas) {
       const daysPassed = this.calculateBusinessDaysPassed(acta);
-      // Cast explícito a string[] para evitar el error de acceso a 'any'
-      // Prisma.JsonValue puede ser string | number | boolean | ...
       const notifications = Array.isArray(acta.notificationsSent)
         ? (acta.notificationsSent as string[])
         : [];
@@ -120,7 +119,6 @@ export class TasksService {
       let updated = false;
       const numeroActa = acta.numeroActa || 'S/N';
 
-      // Hito 30 días
       if (daysPassed >= 30 && !notifications.includes('30_DAYS')) {
         await this.emailService.sendAdminNotificationDeadline(
           adminEmails,
@@ -129,12 +127,8 @@ export class TasksService {
         );
         notifications.push('30_DAYS');
         updated = true;
-        this.logger.log(
-          `Notificación enviada para Acta ${numeroActa} (30 días).`,
-        );
       }
 
-      // Hito 100 días
       if (daysPassed >= 100 && !notifications.includes('100_DAYS')) {
         await this.emailService.sendAdminNotificationDeadline(
           adminEmails,
@@ -143,35 +137,133 @@ export class TasksService {
         );
         notifications.push('100_DAYS');
         updated = true;
-        this.logger.log(
-          `Notificación enviada para Acta ${numeroActa} (100 días).`,
-        );
       }
 
       if (updated) {
-        // Casteamos a 'InputJsonValue' o similar según Prisma, pero 'any' aquí es aceptable para escritura rápida si el tipo array es válido
-        // Sin embargo, para cumplir con linter, mejor dejar que Prisma infiera o usar 'as any' solo si es estrictamente necesario,
-        // pero aquí notifications es string[], Prisma lo acepta para Json.
         await this.prisma.acta.update({
           where: { id: acta.id },
           data: {
             notificationsSent: notifications,
-          } as Prisma.ActaUpdateInput & {
-            notificationsSent: unknown;
-          },
+          } as Prisma.ActaUpdateInput,
         });
       }
     }
   }
 
-  // Helper para calcular días hábiles pasados desde fechaSuscripcion
+  // Lógica NUEVA para notificaciones al Usuario (Deadline Expired)
+  private async handleUserDeadlineNotifications() {
+    this.logger.log('Verificando vencimiento de plazos de usuarios...');
+
+    // Buscar actas en progreso (no ENTREGADA, no COMPLETADA)
+    // y que NO hayan recibido ya la notificación de "DEADLINE_EXPIRED"
+    // Nota: notificationsSent es JSON, el filtro de includes en la query de prisma para JSON arrays
+    // puede ser limitado dependiendo de la versión/DB. Lo haremos en memoria por seguridad y simplicidad.
+    const actasEnProgreso = await this.prisma.acta.findMany({
+      where: {
+        status: { not: ActaStatus.ENTREGADA },
+        isCompleted: false, // Asumiendo que false significa "en borrador/proceso"
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        tiempoRealizacion: true, // Días seleccionados por el usuario
+        userId: true,
+        notificationsSent: true,
+        user: {
+          select: {
+            email: true,
+            nombre: true,
+          },
+        },
+      },
+    });
+
+    const now = new Date();
+
+    for (const acta of actasEnProgreso) {
+      const notifications = Array.isArray(acta.notificationsSent)
+        ? (acta.notificationsSent as string[])
+        : [];
+
+      // Si ya se envió, saltar
+      if (notifications.includes('DEADLINE_EXPIRED')) continue;
+
+      // Calcular Fecha Límite usando Días Hábiles
+      const deadlineDate = this.addBusinessDays(
+        acta.createdAt,
+        acta.tiempoRealizacion,
+      );
+
+      // Si la fecha actual es MAYOR a la fecha límite => Venció
+      if (now > deadlineDate) {
+        this.logger.warn(
+          `Acta ${acta.id} vencida. Deadline: ${deadlineDate.toISOString()}, Ahora: ${now.toISOString()}`,
+        );
+
+        // Enviar Correo
+        try {
+          // Usamos el nombre del usuario o "Usuario" por defecto
+          await this.emailService.sendActaDeadlineExpiredEmail(
+            acta.user.email,
+            acta.user.nombre || 'Usuario',
+          );
+
+          this.logger.log(`Correo de vencimiento enviado a ${acta.user.email}`);
+
+          // Actualizar DB para no reenviar
+          notifications.push('DEADLINE_EXPIRED');
+          await this.prisma.acta.update({
+            where: { id: acta.id },
+            data: {
+              notificationsSent: notifications,
+            } as Prisma.ActaUpdateInput,
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error enviando correo de vencimiento para acta ${acta.id}`,
+            error,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Calcula la fecha final sumando 'days' días HÁBILES a 'startDate'.
+   * Excluye Sábados (6) y Domingos (0).
+   */
+  private addBusinessDays(startDate: Date, daysToAdd: number): Date {
+    const currentDate = new Date(startDate);
+    let addedDays = 0;
+
+    // Si daysToAdd es 0 o negativo, retornamos la misma fecha (o manejamos según lógica de negocio)
+    if (daysToAdd <= 0) return currentDate;
+
+    while (addedDays < daysToAdd) {
+      // Avanzamos un día
+      currentDate.setDate(currentDate.getDate() + 1);
+
+      const dayOfWeek = currentDate.getDay();
+      // Si NO es Domingo (0) NI Sábado (6), cuenta como día hábil
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        addedDays++;
+      }
+    }
+
+    // Opcional: Ajustar al final del día (23:59:59) para solidez en comparaciones
+    // Si deadline es Miércoles, vence al terminar el miércoles.
+    currentDate.setHours(23, 59, 59, 999);
+
+    return currentDate;
+  }
+
+  // Helper para calcular días hábiles pasados desde fechaSuscripcion (Existente)
   private calculateBusinessDaysPassed(acta: {
     createdAt: Date;
     metadata: unknown;
   }): number {
     let startDate = new Date(acta.createdAt);
 
-    // Verificamos si metadata es un objeto y tiene la propiedad fechaSuscripcion
     if (
       typeof acta.metadata === 'object' &&
       acta.metadata !== null &&
@@ -188,7 +280,6 @@ export class TasksService {
       }
     }
 
-    // Contamos días hábiles desde startDate hasta hoy
     const today = new Date();
     startDate.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
@@ -198,7 +289,6 @@ export class TasksService {
     let businessDays = 0;
     const current = new Date(startDate);
 
-    // Avanzamos día a día
     while (current < today) {
       current.setDate(current.getDate() + 1);
       const day = current.getDay();
