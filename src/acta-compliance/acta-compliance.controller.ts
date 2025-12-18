@@ -176,14 +176,15 @@ export class ActaComplianceController {
       reporte.fecha_revision || Date.now(),
     ).toLocaleDateString('es-ES');
 
+    // PRIORITY: Correo del registro > Correo del usuario (Fallback)
     const emailDestino = reporte.correo_electronico || user.email;
 
-    await this.emailService.sendReportWithAttachment(
+    await this.emailService.sendComplianceReport(
       emailDestino,
       buffer,
       fileName,
-      user.nombre,
-      reportDate,
+      reporte.numeroCompliance || 'S/N',
+      reporte.puntajeCalculado || 0,
     );
     await this.actaComplianceService.updateStatus(id, ActaStatus.ENVIADA);
     return { statusCode: HttpStatus.OK, message: 'Reporte enviado' };

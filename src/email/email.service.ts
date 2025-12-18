@@ -48,30 +48,7 @@ export class EmailService {
     });
   }
 
-  async sendReportWithAttachment(
-    to: string,
-    reportBuffer: Buffer,
-    fileName: string,
-    userName: string,
-    reportDate: string, // El 5to argumento que causaba el error
-  ) {
-    // (Tu lógica de email para el Reporte de Compliance va aquí)
-    // ...
-    const htmlContent = `<p>Hola ${userName}, adjunto encontrarás tu reporte de cumplimiento de fecha ${reportDate}.</p>`; // Simplificado
 
-    await this.resend.emails.send({
-      from: `Plataforma Actas <${this.fromEmail}>`,
-      to: [to],
-      subject: `Tu Reporte de Cumplimiento: ${fileName}`,
-      html: htmlContent,
-      attachments: [
-        {
-          filename: fileName,
-          content: reportBuffer,
-        },
-      ],
-    });
-  }
 
   // ---
   // --- 👇 ¡ESTA ES LA FUNCIÓN NUEVA QUE FALTA! 👇 ---

@@ -331,8 +331,7 @@ export class ActaComplianceService {
         complianceData.fecha_revision || Date.now(),
       ).toLocaleDateString('es-VE');
 
-      // PRIORITY: Correo del registro > Correo del usuario
-      // Forzamos el tipado para acceder a correo_electronico si TS se queja
+      // PRIORITY: Correo del registro > Correo del usuario (Fallback)
       const complianceAny = complianceData as any;
       const emailDestino = complianceAny.correo_electronico || user.email;
 
