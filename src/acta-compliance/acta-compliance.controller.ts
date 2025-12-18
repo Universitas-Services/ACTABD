@@ -176,8 +176,10 @@ export class ActaComplianceController {
       reporte.fecha_revision || Date.now(),
     ).toLocaleDateString('es-ES');
 
+    const emailDestino = reporte.correo_electronico || user.email;
+
     await this.emailService.sendReportWithAttachment(
-      user.email,
+      emailDestino,
       buffer,
       fileName,
       user.nombre,

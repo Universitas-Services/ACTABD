@@ -59,17 +59,37 @@ export class ActaComplianceService {
       return newCompliance;
     } catch (error) {
       console.error('Error al crear el registro de compliance:', error);
+      console.error('Error al crear el registro de compliance:', error);
+      // 🔥 DEBUG: Exponer el error real para que el usuario lo vea en Postman
       throw new InternalServerErrorException(
-        'No se pudo crear el registro de cumplimiento.',
+        `No se pudo crear el registro de cumplimiento. Detalle: ${error instanceof Error ? error.message : JSON.stringify(error)
+        }`,
       );
     }
   }
 
-  // 👇 3. MÉTODO PRIVADO PARA GENERAR EL CONSECUTIVO
   private async generarNumeroCompliance(): Promise<string> {
-    const count = await this.prisma.actaCompliance.count();
+    // Buscamos el último registro ordenado por fecha de creación descendente
+    const lastRecord = await this.prisma.actaCompliance.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { numeroCompliance: true }, // Solo necesitamos el número
+    });
+
+    let newNumber = 1;
+
+    if (lastRecord && lastRecord.numeroCompliance) {
+      // Extraemos la parte numérica: "COMP-0005" -> "0005" -> 5
+      const parts = lastRecord.numeroCompliance.split('-');
+      if (parts.length === 2) {
+        const lastNum = parseInt(parts[1], 10);
+        if (!isNaN(lastNum)) {
+          newNumber = lastNum + 1;
+        }
+      }
+    }
+
     // Genera algo como "COMP-0001", "COMP-0002", etc.
-    return `COMP-${(count + 1).toString().padStart(4, '0')}`;
+    return `COMP-${newNumber.toString().padStart(4, '0')}`;
   }
 
   /**
@@ -311,8 +331,13 @@ export class ActaComplianceService {
         complianceData.fecha_revision || Date.now(),
       ).toLocaleDateString('es-VE');
 
+      // PRIORITY: Correo del registro > Correo del usuario
+      // Forzamos el tipado para acceder a correo_electronico si TS se queja
+      const complianceAny = complianceData as any;
+      const emailDestino = complianceAny.correo_electronico || user.email;
+
       await this.emailService.sendComplianceReport(
-        user.email,
+        emailDestino,
         pdfBuffer,
         fileName,
         complianceData.numeroCompliance || 'S/N',
