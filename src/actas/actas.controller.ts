@@ -45,6 +45,7 @@ import { CreateActaDto } from '../auth/dto/create-acta.dto';
 import { UpdateActaDto } from '../auth/dto/update-acta.dto';
 import { GetActasFilterDto } from './dto/get-actas-filter.dto';
 import { ActaResponseDto } from './dto/actas-response.dto';
+import { ActaAdminInfoResponseDto } from './dto/acta-admin-info-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { ACTAS_FINDINGS_MAP } from './actas.constants';
@@ -123,6 +124,23 @@ export class ActasController {
   })
   getStats() {
     return this.actasService.getActasStats();
+  }
+
+  @Get('admin/:id/info')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Obtener información específica de un acta formateada (ADMIN ONLY)',
+  })
+  @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Información formateada del acta.',
+    type: ActaAdminInfoResponseDto,
+  })
+  getAdminInfo(@Param('id', ParseUUIDPipe) id: string) {
+    return this.actasService.getActaInfoForAdmin(id);
   }
 
   @Get(':id')
