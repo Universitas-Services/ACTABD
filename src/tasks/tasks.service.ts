@@ -83,6 +83,9 @@ export class TasksService {
 
     // --- 2. NOTIFICACIONES AL USUARIO (Vencimiento de Plazo) ---
     await this.handleUserDeadlineNotifications();
+
+    // --- 3. NOTIFICACIONES AL USUARIO (Recordatorio UAI - 4 días hábiles) ---
+    await this.handleUaiDeliveryNotifications();
   }
 
   // Lógica separada para notificaciones de Admin (existente)
@@ -221,6 +224,76 @@ export class TasksService {
         } catch (error) {
           this.logger.error(
             `Error enviando correo de vencimiento para acta ${acta.id}`,
+            error,
+          );
+        }
+      }
+    }
+  }
+
+  // Lógica NUEVA para notificaciones de Entrega UAI (4 días hábiles post-suscripción)
+  private async handleUaiDeliveryNotifications() {
+    this.logger.log('Verificando recordatorios de entrega a la UAI...');
+
+    // Buscar Actas que:
+    // 1. NO estén entregadas
+    // 2. Tengan fechaSuscripcion en metadata
+    // 3. NO tengan ya la notificación 'UAI_REMINDER'
+    // Como el filtro de JSON en Prisma es limitado, traemos las candidatas y filtramos en JS.
+    const actasCandidatas = await this.prisma.acta.findMany({
+      where: {
+        status: { not: ActaStatus.ENTREGADA },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        metadata: true,
+        userId: true,
+        notificationsSent: true,
+        user: {
+          select: {
+            email: true,
+            nombre: true,
+          },
+        },
+      },
+    });
+
+    for (const acta of actasCandidatas) {
+      const notifications = Array.isArray(acta.notificationsSent)
+        ? (acta.notificationsSent as string[])
+        : [];
+
+      // Si ya se envió, saltar
+      if (notifications.includes('UAI_REMINDER')) continue;
+
+      // Calcular días hábiles pasados desde la fecha de suscripción
+      const daysPassed = this.calculateBusinessDaysPassed(acta);
+
+      // Si han pasado 4 o más días hábiles, enviar recordatorio
+      // (La norma da 5 días, notificamos al 4to para dar margen)
+      if (daysPassed >= 4) {
+        this.logger.log(
+          `Recordatorio UAI enviado para Acta ID ${acta.id} (Han pasado ${daysPassed} días hábiles)`,
+        );
+
+        try {
+          await this.emailService.sendUaiDeliveryReminder(
+            acta.user.email,
+            acta.user.nombre || 'Usuario',
+          );
+
+          // Actualizar DB
+          notifications.push('UAI_REMINDER');
+          await this.prisma.acta.update({
+            where: { id: acta.id },
+            data: {
+              notificationsSent: notifications,
+            } as Prisma.ActaUpdateInput,
+          });
+        } catch (error) {
+          this.logger.error(
+            `Error enviando recordatorio UAI para acta ${acta.id}`,
             error,
           );
         }

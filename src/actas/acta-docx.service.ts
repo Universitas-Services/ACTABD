@@ -279,8 +279,11 @@ export class ActaDocxService {
         acta.metadata as Record<string, unknown>,
       );
 
+      // Limpiar HTML antes de convertir a DOCX para evitar espacios innecesarios
+      const htmlLimpio = this.limpiarHtmlParaDocx(htmlContent);
+
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      const fileBuffer = await HTMLtoDOCX(htmlContent, null, {
+      const fileBuffer = await HTMLtoDOCX(htmlLimpio, null, {
         table: { row: { cantSplit: true } },
         footer: false,
         header: false,
@@ -477,5 +480,21 @@ export class ActaDocxService {
     htmlContent = htmlContent.replace(/{{[^}]+}}/g, '');
 
     return htmlContent;
+  }
+
+  /**
+   * Limpia el HTML para evitar espacios innecesarios en el documento DOCX.
+   * Elimina saltos de línea entre tags y normaliza espacios múltiples.
+   */
+  private limpiarHtmlParaDocx(html: string): string {
+    return (
+      html
+        // Eliminar saltos de línea y espacios entre tags
+        .replace(/>\s+</g, '><')
+        // Normalizar espacios múltiples dentro del contenido a un solo espacio
+        .replace(/\s{2,}/g, ' ')
+        // Eliminar espacios al inicio y final
+        .trim()
+    );
   }
 }

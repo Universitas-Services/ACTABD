@@ -332,4 +332,38 @@ export class EmailService {
       html: htmlContent,
     });
   }
+
+  /**
+   * NOTIFICACIÓN AL USUARIO: Recordatorio de Entrega a la UAI (4 días hábiles post-suscripción)
+   */
+  async sendUaiDeliveryReminder(to: string, userName: string) {
+    const templatePath = path.join(
+      __dirname,
+      'templates',
+      'acta-uai-reminder.html',
+    );
+    let htmlContent = '';
+    const subject =
+      '⏳ ¿Ya entregaste tu Acta? Tienes 5 días hábiles para formalizar ante la UAI.';
+
+    try {
+      if (!fs.existsSync(templatePath)) {
+        console.error('¡LA PLANTILLA acta-uai-reminder.html NO EXISTE!');
+        htmlContent = `<p>Hola ${userName}, recuerda entregar tu acta a la UAI. Tienes 5 días hábiles.</p>`;
+      } else {
+        htmlContent = fs.readFileSync(templatePath, 'utf8');
+        htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+      }
+    } catch (error) {
+      console.error('ERROR LEYENDO PLANTILLA UAI REMINDER:', error);
+      htmlContent = `<p>Hola ${userName}, recuerda entregar tu acta a la UAI. Tienes 5 días hábiles.</p>`;
+    }
+
+    await this.resend.emails.send({
+      from: `Actas de Entrega <${this.fromEmail}>`,
+      to: [to],
+      subject: subject,
+      html: htmlContent,
+    });
+  }
 }
