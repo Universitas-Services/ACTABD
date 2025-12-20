@@ -4,7 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
-import { ActaStatus, UserRole, Prisma } from '@prisma/client';
+import { ActaStatus, UserRole, Prisma, ActaType } from '@prisma/client';
 
 @Injectable()
 export class TasksService {
@@ -86,6 +86,12 @@ export class TasksService {
 
     // --- 3. NOTIFICACIONES AL USUARIO (Recordatorio UAI - 4 días hábiles) ---
     await this.handleUaiDeliveryNotifications();
+
+    // --- 4. NOTIFICACIONES AL USUARIO (Lapso de Verificación - 30 y 100 días SALIENTE) ---
+    await this.handleUserVerificationNotifications();
+
+    // --- 5. NOTIFICACIONES AL USUARIO (Lapso de Verificación - 30 y 100 días INCOMING) ---
+    await this.handleIncomingVerificationNotifications();
   }
 
   // Lógica separada para notificaciones de Admin (existente)
@@ -297,6 +303,202 @@ export class TasksService {
             error,
           );
         }
+      }
+    }
+  }
+
+  // Lógica NUEVA para notificaciones de Lapso de Verificación (30 y 100 días hábiles)
+  // Solo para Actas de tipo SALIENTE_PAGA
+  private async handleUserVerificationNotifications() {
+    this.logger.log(
+      'Verificando notificaciones de lapso de verificación (30 y 100 días)...',
+    );
+
+    // Buscar Actas que:
+    // 1. Sean de tipo SALIENTE_PAGA
+    // 2. Tengan fechaSuscripcion en metadata
+    // 3. NO estén "completamente cerradas" (aunque status ENTREGADA es el esperado, seguimos monitoreando)
+    const actasCandidatas = await this.prisma.acta.findMany({
+      where: {
+        type: 'SALIENTE_PAGA', // Filtro explícito por tipo
+        // Podríamos filtrar also por status: ENTREGA, pero mejor ser amplios por si acaso
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        metadata: true,
+        userId: true,
+        notificationsSent: true,
+        user: {
+          select: {
+            email: true,
+            nombre: true,
+          },
+        },
+      },
+    });
+
+    for (const acta of actasCandidatas) {
+      const notifications = Array.isArray(acta.notificationsSent)
+        ? (acta.notificationsSent as string[])
+        : [];
+
+      // Si ya se enviaron AMBOS correos, saltamos
+      if (
+        notifications.includes('USER_VERIF_30') &&
+        notifications.includes('USER_VERIF_100')
+      ) {
+        continue;
+      }
+
+      // Calcular días hábiles pasados desde la fecha de suscripción
+      const daysPassed = this.calculateBusinessDaysPassed(acta);
+
+      let updated = false;
+
+      // 1. Notificación de 30 Días (Faltan 90)
+      if (daysPassed >= 30 && !notifications.includes('USER_VERIF_30')) {
+        this.logger.log(
+          `Enviando notificación 30 días verificación para Acta ${acta.id}`,
+        );
+        try {
+          await this.emailService.sendVerification30DaysEmail(
+            acta.user.email,
+            acta.user.nombre || 'Usuario',
+          );
+          notifications.push('USER_VERIF_30');
+          updated = true;
+        } catch (error) {
+          this.logger.error(
+            `Error enviando notificación 30 días para acta ${acta.id}`,
+            error,
+          );
+        }
+      }
+
+      // 2. Notificación de 100 Días (Faltan 20 - Recta Final)
+      if (daysPassed >= 100 && !notifications.includes('USER_VERIF_100')) {
+        this.logger.log(
+          `Enviando notificación 100 días verificación para Acta ${acta.id}`,
+        );
+        try {
+          await this.emailService.sendVerification100DaysEmail(
+            acta.user.email,
+            acta.user.nombre || 'Usuario',
+          );
+          notifications.push('USER_VERIF_100');
+          updated = true;
+        } catch (error) {
+          this.logger.error(
+            `Error enviando notificación 100 días para acta ${acta.id}`,
+            error,
+          );
+        }
+      }
+
+      // Guardar cambios si hubo envíos
+      if (updated) {
+        await this.prisma.acta.update({
+          where: { id: acta.id },
+          data: {
+            notificationsSent: notifications,
+          } as Prisma.ActaUpdateInput,
+        });
+      }
+    }
+  }
+
+  // Lógica NUEVA para notificaciones de Lapso de Verificación (Incoming/Authority)
+  // Para ENTRANTE_PAGA y MAXIMA_AUTORIDAD_PAGA
+  private async handleIncomingVerificationNotifications() {
+    this.logger.log(
+      'Verificando notificaciones INCOMING de lapso de verificación...',
+    );
+
+    const actasCandidatas = await this.prisma.acta.findMany({
+      where: {
+        type: {
+          in: [ActaType.ENTRANTE_PAGA, ActaType.MAXIMA_AUTORIDAD_PAGA],
+        },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        metadata: true,
+        userId: true,
+        notificationsSent: true,
+        user: {
+          select: {
+            email: true,
+            nombre: true,
+          },
+        },
+      },
+    });
+
+    for (const acta of actasCandidatas) {
+      const notifications = Array.isArray(acta.notificationsSent)
+        ? (acta.notificationsSent as string[])
+        : [];
+
+      // Si ya se enviaron AMBOS correos, saltamos
+      if (
+        notifications.includes('INCOMING_VERIF_30') &&
+        notifications.includes('INCOMING_VERIF_100')
+      ) {
+        continue;
+      }
+
+      const daysPassed = this.calculateBusinessDaysPassed(acta);
+      let updated = false;
+
+      // 1. Notificación de 30 Días (Incoming)
+      if (daysPassed >= 30 && !notifications.includes('INCOMING_VERIF_30')) {
+        this.logger.log(
+          `Enviando notificación INCOMING 30 días para Acta ${acta.id}`,
+        );
+        try {
+          await this.emailService.sendVerificationIncoming30DaysEmail(
+            acta.user.email,
+            acta.user.nombre || 'Usuario',
+          );
+          notifications.push('INCOMING_VERIF_30');
+          updated = true;
+        } catch (error) {
+          this.logger.error(
+            `Error enviando notificación INCOMING 30 días para acta ${acta.id}`,
+            error,
+          );
+        }
+      }
+
+      // 2. Notificación de 100 Días (Incoming)
+      if (daysPassed >= 100 && !notifications.includes('INCOMING_VERIF_100')) {
+        this.logger.log(
+          `Enviando notificación INCOMING 100 días para Acta ${acta.id}`,
+        );
+        try {
+          await this.emailService.sendVerificationIncoming100DaysEmail(
+            acta.user.email,
+            acta.user.nombre || 'Usuario',
+          );
+          notifications.push('INCOMING_VERIF_100');
+          updated = true;
+        } catch (error) {
+          this.logger.error(
+            `Error enviando notificación INCOMING 100 días para acta ${acta.id}`,
+            error,
+          );
+        }
+      }
+
+      if (updated) {
+        await this.prisma.acta.update({
+          where: { id: acta.id },
+          data: {
+            notificationsSent: notifications,
+          } as Prisma.ActaUpdateInput,
+        });
       }
     }
   }

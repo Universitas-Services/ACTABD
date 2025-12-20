@@ -366,4 +366,150 @@ export class EmailService {
       html: htmlContent,
     });
   }
+
+  /**
+   * NOTIFICACIÓN AL USUARIO: 30 Días de Verificación (Faltan 90)
+   */
+  async sendVerification30DaysEmail(to: string, userName: string) {
+    const templatePath = path.join(
+      __dirname,
+      'templates',
+      'acta-verification-30.html',
+    );
+    let htmlContent = '';
+    const subject =
+      '⏳ Estatus de tu Acta: Faltan 90 días para cerrar el lapso de verificación legal.';
+
+    try {
+      if (!fs.existsSync(templatePath)) {
+        console.error('¡LA PLANTILLA acta-verification-30.html NO EXISTE!');
+        htmlContent = `<p>Estimado ${userName}, restan 90 días de su periodo de verificación legal.</p>`;
+      } else {
+        htmlContent = fs.readFileSync(templatePath, 'utf8');
+        htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+      }
+    } catch (error) {
+      console.error('ERROR LEYENDO PLANTILLA VERIFICACION 30:', error);
+      htmlContent = `<p>Estimado ${userName}, restan 90 días de su periodo de verificación legal.</p>`;
+    }
+
+    await this.resend.emails.send({
+      from: `Actas de Entrega <${this.fromEmail}>`,
+      to: [to],
+      subject: subject,
+      html: htmlContent,
+    });
+  }
+
+  /**
+   * NOTIFICACIÓN AL USUARIO: 100 Días de Verificación (Faltan 20 - Recta Final)
+   */
+  async sendVerification100DaysEmail(to: string, userName: string) {
+    const templatePath = path.join(
+      __dirname,
+      'templates',
+      'acta-verification-100.html',
+    );
+    let htmlContent = '';
+    const subject =
+      '🚨 Recta final: Solo quedan 20 días para el cierre del periodo de observaciones.';
+
+    try {
+      if (!fs.existsSync(templatePath)) {
+        console.error('¡LA PLANTILLA acta-verification-100.html NO EXISTE!');
+        htmlContent = `<p>Estimado ${userName}, solo quedan 20 días de su periodo de verificación legal.</p>`;
+      } else {
+        htmlContent = fs.readFileSync(templatePath, 'utf8');
+        htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+      }
+    } catch (error) {
+      console.error('ERROR LEYENDO PLANTILLA VERIFICACION 100:', error);
+      htmlContent = `<p>Estimado ${userName}, solo quedan 20 días de su periodo de verificación legal.</p>`;
+    }
+
+    await this.resend.emails.send({
+      from: `Actas de Entrega <${this.fromEmail}>`,
+      to: [to],
+      subject: subject,
+      html: htmlContent,
+    });
+  }
+
+  /**
+   * NOTIFICACIÓN AL USUARIO ENTRANTE/MÁXIMA AUTORIDAD: 30 Días (Restan 90)
+   */
+  async sendVerificationIncoming30DaysEmail(to: string, userName: string) {
+    const templatePath = path.join(
+      __dirname,
+      'templates',
+      'acta-verification-incoming-30.html',
+    );
+    let htmlContent = '';
+    const subject =
+      '🔍 Tu escudo legal: Restan 90 días para verificar y cotejar la documentación y el físico';
+
+    try {
+      if (!fs.existsSync(templatePath)) {
+        console.error(
+          '¡LA PLANTILLA acta-verification-incoming-30.html NO EXISTE!',
+        );
+        htmlContent = `<p>Estimado ${userName}, restan 90 días para verificar su documentación.</p>`;
+      } else {
+        htmlContent = fs.readFileSync(templatePath, 'utf8');
+        htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+      }
+    } catch (error) {
+      console.error(
+        'ERROR LEYENDO PLANTILLA VERIFICACION INCOMING 30:',
+        error,
+      );
+      htmlContent = `<p>Estimado ${userName}, restan 90 días para verificar su documentación.</p>`;
+    }
+
+    await this.resend.emails.send({
+      from: `Actas de Entrega <${this.fromEmail}>`,
+      to: [to],
+      subject: subject,
+      html: htmlContent,
+    });
+  }
+
+  /**
+   * NOTIFICACIÓN AL USUARIO ENTRANTE/MÁXIMA AUTORIDAD: 100 Días (Restan 20 - Última Alerta)
+   */
+  async sendVerificationIncoming100DaysEmail(to: string, userName: string) {
+    const templatePath = path.join(
+      __dirname,
+      'templates',
+      'acta-verification-incoming-100.html',
+    );
+    let htmlContent = '';
+    const subject =
+      '🚨 ÚLTIMA ALERTA: Solo 20 días para deslindar su responsabilidad administrativa.';
+
+    try {
+      if (!fs.existsSync(templatePath)) {
+        console.error(
+          '¡LA PLANTILLA acta-verification-incoming-100.html NO EXISTE!',
+        );
+        htmlContent = `<p>Estimado ${userName}, restan solo 20 días para deslindar responsabilidad.</p>`;
+      } else {
+        htmlContent = fs.readFileSync(templatePath, 'utf8');
+        htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+      }
+    } catch (error) {
+      console.error(
+        'ERROR LEYENDO PLANTILLA VERIFICACION INCOMING 100:',
+        error,
+      );
+      htmlContent = `<p>Estimado ${userName}, restan solo 20 días para deslindar responsabilidad.</p>`;
+    }
+
+    await this.resend.emails.send({
+      from: `Actas de Entrega <${this.fromEmail}>`,
+      to: [to],
+      subject: subject,
+      html: htmlContent,
+    });
+  }
 }
