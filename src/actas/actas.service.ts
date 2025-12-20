@@ -313,12 +313,12 @@ export class ActasService {
   async update(id: string, updateActaDto: UpdateActaDto, user: User) {
     const currentActa = await this.findOneForUser(id, user);
 
-    // --- VALIDACIÓN DE BLOQUEO ---
-    if (currentActa.status === ActaStatus.ENTREGADA) {
-      throw new ForbiddenException(
-        'El acta está marcada como ENTREGADA y no se puede editar.',
-      );
-    }
+    // --- VALIDACIÓN DE BLOQUEO (DESHABILITADA POR SOLICITUD) ---
+    // if (currentActa.status === ActaStatus.ENTREGADA) {
+    //   throw new ForbiddenException(
+    //     'El acta está marcada como ENTREGADA y no se puede editar.',
+    //   );
+    // }
     // -----------------------------
 
     const { nombreEntidad, type, metadata, tiempoRealizacion, createdAt } =

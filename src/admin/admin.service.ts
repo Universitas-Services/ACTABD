@@ -44,7 +44,12 @@ export class AdminService {
     const skip = (page - 1) * limit;
 
     // Construir el filtro dinámicamente
-    const where: Prisma.UserWhereInput = {};
+    const where: Prisma.UserWhereInput = {
+      isActive: true,
+      role: {
+        not: UserRole.ADMIN,
+      },
+    };
 
     if (role) {
       where.role = role;
