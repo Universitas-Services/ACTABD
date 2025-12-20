@@ -78,30 +78,44 @@ export class ActasService {
     return nuevaActa;
   }
 
-  // --- CAMBIO PRINCIPAL AQUÍ ---
-  // Busca el último número existente en lugar de contar registros
+  // --- CAMBIO ROBUSTO PARA EVITAR DUPLICADOS ---
   private async generarNumeroActa(): Promise<string> {
-    // Busca el acta más reciente ordenando por fecha de creación
+    // 1. Buscamos el acta con el número más alto ordenando por numeroActa DESC
+    // Nota: Como es string ("ACTA-XXXX"), el orden alfabético funciona bien si el padding es consistente
     const lastActa = await this.prisma.acta.findFirst({
-      orderBy: { createdAt: 'desc' },
+      where: {
+        numeroActa: { not: null },
+      },
+      orderBy: { numeroActa: 'desc' },
     });
 
-    let nextNumber = 1; // Valor inicial si la base de datos está vacía
+    let nextNumber = 1;
 
-    // Si ya existe un acta, extraemos su número y sumamos 1
     if (lastActa && lastActa.numeroActa) {
-      // El formato es "ACTA-0001", hacemos split para obtener ["ACTA", "0001"]
       const parts = lastActa.numeroActa.split('-');
       if (parts.length === 2) {
         const lastSequence = parseInt(parts[1], 10);
         if (!isNaN(lastSequence)) {
-          nextNumber = lastSequence + 1; // Aquí ocurre la magia: 5 + 1 = 6 (aunque solo hayan 4 registros)
+          nextNumber = lastSequence + 1;
         }
       }
     }
 
-    // Formatea el nuevo número (ej: 6 se convierte en "ACTA-0006")
-    return `ACTA-${nextNumber.toString().padStart(4, '0')}`;
+    // 2. Loop de seguridad: Verificamos si existe por si acaso (race condition)
+    let candidate = `ACTA-${nextNumber.toString().padStart(4, '0')}`;
+    let exists = await this.prisma.acta.findUnique({
+      where: { numeroActa: candidate },
+    });
+
+    while (exists) {
+      nextNumber++;
+      candidate = `ACTA-${nextNumber.toString().padStart(4, '0')}`;
+      exists = await this.prisma.acta.findUnique({
+        where: { numeroActa: candidate },
+      });
+    }
+
+    return candidate;
   }
 
   private checkMetadataCompletion(metadata: any): boolean {
