@@ -1,63 +1,72 @@
-<div
-    style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; background-color: #ffffff;">
+<!DOCTYPE html>
+<html lang="es">
 
-    <!-- Título Principal -->
-    <h2 style="color: #001A70; text-align: left; font-size: 18px;">
-        ⏳ Estatus de tu Acta: Faltan 90 días para cerrar el lapso de verificación legal.
-    </h2>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estatus de Verificación: Faltan 90 días</title>
+</head>
 
-    <p style="color: #333; font-size: 16px;">
-        Estimado(a) <strong>{{userName}}</strong>:
-    </p>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
+    <div
+        style="max-width: 600px; margin: 40px auto; background-color: #ffffff; padding: 40px; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
 
-    <p style="color: #333; font-size: 16px;">
-        Te escribimos para informarte que, según el cronograma legal de tu proceso de entrega, restan 90 días hábiles
-        del periodo de verificación establecido en el Artículo 22 de la Resolución N.º 01-00-0162 de la CGR.
-    </p>
+        <h2 style="color: #1a2b4b; text-align: center; font-size: 24px; margin-bottom: 30px; font-weight: bold;">
+            ⏳ Estatus de tu Acta: Faltan 90 días para el cierre del lapso de verificación legal.
+        </h2>
 
-    <!-- Sección ¿Qué significa esto? -->
-    <h3 style="color: #001A70; font-size: 16px; margin-top: 25px;">
-        ¿Qué significa esto para ti?
-    </h3>
-    <p style="color: #333; font-size: 16px;">
-        Actualmente, la institución y el funcionario que recibió tu cargo se encuentran dentro del plazo legal para
-        auditar la exactitud de la información que entregaste. Durante estos tres meses restantes, es posible que
-        recibas alguna notificación para aclarar datos, anexos o cifras de tu gestión.
-    </p>
+        <p style="color: #333333; font-size: 16px; line-height: 1.5;">Estimado(a) {{userName}}:</p>
 
-    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #333333; font-size: 16px; line-height: 1.5;">
+            Le informamos que, de acuerdo con el cronograma legal de su proceso de entrega, restan <strong>90 días
+                hábiles</strong> del periodo de verificación establecido en el <strong>Artículo 22 de la Resolución N.º
+                01-00-0162 de la CGR</strong>.
+        </p>
 
-    <!-- Recomendaciones Pro -->
-    <div style="background-color: #f0f7ff; padding: 15px; border-radius: 5px; border-left: 5px solid #001A70;">
-        <h3 style="color: #001A70; font-size: 16px; margin-top: 0;">
-            💡 Recomendaciones Pro:
-        </h3>
-        <ul style="color: #555; font-size: 14px; padding-left: 20px;">
-            <li style="margin-bottom: 10px;">
-                <strong>Mantén tus datos actualizados:</strong> Asegúrate de que la institución tenga tu dirección y
-                teléfono correctos para cualquier notificación oficial (Art. 22 de la Resolución N.º 01-00-0162 de la
-                CGR).
-            </li>
-            <li style="margin-bottom: 10px;">
-                <strong>Ten tu copia a mano:</strong> Recuerda que como usuario PRO, siempre tienes acceso a tu acta en
-                nuestra plataforma por si necesitas consultar algún detalle rápidamente.
-            </li>
-            <li>
-                <strong>Usa el Consultor IA:</strong> Si recibes alguna observación técnica por parte de la Unidad de
-                Auditoría, puedes usar nuestra IA para entender el fundamento legal de lo que te solicitan.
-            </li>
+        <h3 style="color: #1a2b4b; font-size: 18px; margin-top: 30px;">¿Qué significa esto para usted?</h3>
+        <p style="color: #333333; font-size: 16px; line-height: 1.5;">
+            La institución y el funcionario que recibió el cargo disponen de este tiempo legal para auditar la exactitud
+            de la información entregada. Durante este periodo, es posible que sea requerido por la autoridad competente
+            para aclarar datos, anexos o cifras correspondientes a su gestión, tal como lo establece el Artículo 22 de
+            la mencionada resolución.
+        </p>
+
+        <h3 style="color: #1a2b4b; font-size: 18px; margin-top: 30px;">Recordatorios importantes para su seguridad
+            jurídica:</h3>
+        <ul style="color: #333333; font-size: 16px; line-height: 1.5; padding-left: 20px;">
+            <li style="margin-bottom: 10px;"><strong>Actualización de datos:</strong> Es fundamental que la
+                institución cuente con su dirección y teléfono actualizados para garantizar la recepción de cualquier
+                notificación oficial.</li>
+            <li style="margin-bottom: 10px;"><strong>Respaldo digital:</strong> Recuerde que su acta permanece
+                almacenada de forma segura en la plataforma para su consulta inmediata ante cualquier requerimiento o
+                duda.</li>
+            <li style="margin-bottom: 10px;"><strong>Soporte normativo (IA):</strong> En caso de recibir alguna
+                observación técnica por parte de la Unidad de Auditoría Interna, puede utilizar el Consultor IA dentro
+                de la aplicación para comprender los fundamentos legales y los lapsos de respuesta de la solicitud.</li>
         </ul>
+
+        <p style="color: #333333; font-size: 16px; line-height: 1.5;">
+            Mantenga el seguimiento de su proceso hasta el cierre definitivo de su responsabilidad administrativa.
+        </p>
+
+        <div style="text-align: center; margin: 35px 0;">
+            <a href="{{dashboardUrl}}"
+                style="background-color: #1a2b4b; color: #ffffff; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 16px; display: inline-block;">
+                INGRESAR A MI PANEL DE ACTA
+            </a>
+        </div>
+
+        <p style="color: #333333; font-size: 16px; line-height: 1.5;">
+            Atentamente,<br>
+            El equipo de soporte técnico
+        </p>
+
+        <div
+            style="border-top: 1px solid #eee; margin-top: 30px; padding-top: 20px; font-size: 12px; color: #999; text-align: center;">
+            <p>&copy; 2025 Acta de Entrega. Todos los derechos reservados.</p>
+        </div>
+
     </div>
+</body>
 
-    <p style="color: #333; font-size: 16px; margin-top: 20px;">
-        Estamos aquí para acompañarte hasta el cierre definitivo de tu responsabilidad administrativa.
-    </p>
-
-    <br>
-
-    <!-- Footer -->
-    <div style="text-align: center; color: #888; font-size: 12px; margin-top: 20px;">
-        <p>Atentamente,<br>El equipo de Acta de Entrega</p>
-    </div>
-
-</div>
+</html>

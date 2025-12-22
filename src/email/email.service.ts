@@ -200,7 +200,8 @@ export class EmailService {
     );
     let htmlContent = '';
     const subject =
-      '📊 Resultados de Compliance: Tu Acta de Entrega ya fue analizada. Revisa tu reporte de fallas y riesgos.';
+      '📊 Reporte de Compliance: Análisis de cumplimiento y riesgos de tu Acta.';
+    const dashboardUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`;
 
     console.log('--- DEBUG EMAIL ---');
     console.log('Intentando leer plantilla desde:', templatePath);
@@ -216,6 +217,7 @@ export class EmailService {
         /{{complianceScore}}/g,
         complianceScore.toFixed(2),
       );
+      htmlContent = htmlContent.replace(/{{dashboardUrl}}/g, dashboardUrl);
     } catch (error) {
       console.error('ERROR LEYENDO PLANTILLA:', error);
       console.warn(
@@ -282,23 +284,24 @@ export class EmailService {
     );
     let htmlContent = '';
     const subject =
-      '⚠️ El tiempo corre: Protege tu carrera con tu Acta de Entrega lista en minutos';
+      '⚠️ Plazo Legal: Tienes 3 días para formalizar tu Acta de Entrega';
+    const continueUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`; // URL para continuar
 
     try {
       if (!fs.existsSync(templatePath)) {
         console.error('¡LA PLANTILLA follow-up-acta.html NO EXISTE!');
-        htmlContent = `<p>Hola ${userName}, recuerda completar tu acta. Te quedan aprox. ${daysRemaining} días hábiles.</p>`;
+        htmlContent = `<p>Hola ${userName}, recuerda completar tu acta. Tienes 3 días hábiles.</p>`;
       } else {
         htmlContent = fs.readFileSync(templatePath, 'utf8');
         htmlContent = htmlContent.replace(/{{userName}}/g, userName);
         htmlContent = htmlContent.replace(
-          /{{daysRemaining}}/g,
-          daysRemaining.toString(),
+          /{{continueUrl}}/g,
+          continueUrl,
         );
       }
     } catch (error) {
       console.error('ERROR LEYENDO PLANTILLA DE SEGUIMIENTO:', error);
-      htmlContent = `<p>Hola ${userName}, recuerda completar tu acta. Te quedan aprox. ${daysRemaining} días hábiles.</p>`;
+      htmlContent = `<p>Hola ${userName}, recuerda completar tu acta. Tienes 3 días hábiles.</p>`;
     }
 
     await this.resend.emails.send({
@@ -320,7 +323,8 @@ export class EmailService {
     );
     let htmlContent = '';
     const subject =
-      '🚨 URGENTE: El plazo de 3 días ha vencido. Instrucciones para la entrega inmediata de tu Acta.';
+      '🚨 URGENTE: El plazo de 3 días ha vencido. Instrucciones para la formalización de tu Acta.';
+    const dashboardUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`; // URL para continuar
 
     try {
       if (!fs.existsSync(templatePath)) {
@@ -331,6 +335,7 @@ export class EmailService {
       } else {
         htmlContent = fs.readFileSync(templatePath, 'utf8');
         htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+        htmlContent = htmlContent.replace(/{{dashboardUrl}}/g, dashboardUrl);
       }
     } catch (error) {
       console.error('ERROR LEYENDO PLANTILLA DE VENCIMIENTO:', error);
@@ -357,6 +362,7 @@ export class EmailService {
     let htmlContent = '';
     const subject =
       '⏳ ¿Ya entregaste tu Acta? Tienes 5 días hábiles para formalizar ante la UAI.';
+    const dashboardUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`; // URL para registrar
 
     try {
       if (!fs.existsSync(templatePath)) {
@@ -365,6 +371,7 @@ export class EmailService {
       } else {
         htmlContent = fs.readFileSync(templatePath, 'utf8');
         htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+        htmlContent = htmlContent.replace(/{{dashboardUrl}}/g, dashboardUrl);
       }
     } catch (error) {
       console.error('ERROR LEYENDO PLANTILLA UAI REMINDER:', error);
@@ -390,7 +397,8 @@ export class EmailService {
     );
     let htmlContent = '';
     const subject =
-      '⏳ Estatus de tu Acta: Faltan 90 días para cerrar el lapso de verificación legal.';
+      '⏳ Estatus de tu Acta: Faltan 90 días para el cierre del lapso de verificación legal.';
+    const dashboardUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`;
 
     try {
       if (!fs.existsSync(templatePath)) {
@@ -399,6 +407,7 @@ export class EmailService {
       } else {
         htmlContent = fs.readFileSync(templatePath, 'utf8');
         htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+        htmlContent = htmlContent.replace(/{{dashboardUrl}}/g, dashboardUrl);
       }
     } catch (error) {
       console.error('ERROR LEYENDO PLANTILLA VERIFICACION 30:', error);
@@ -425,6 +434,7 @@ export class EmailService {
     let htmlContent = '';
     const subject =
       '🚨 Recta final: Solo quedan 20 días para el cierre del periodo de observaciones.';
+    const dashboardUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`;
 
     try {
       if (!fs.existsSync(templatePath)) {
@@ -433,6 +443,7 @@ export class EmailService {
       } else {
         htmlContent = fs.readFileSync(templatePath, 'utf8');
         htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+        htmlContent = htmlContent.replace(/{{dashboardUrl}}/g, dashboardUrl);
       }
     } catch (error) {
       console.error('ERROR LEYENDO PLANTILLA VERIFICACION 100:', error);
@@ -458,7 +469,8 @@ export class EmailService {
     );
     let htmlContent = '';
     const subject =
-      '🔍 Tu escudo legal: Restan 90 días para verificar y cotejar la documentación y el físico';
+      '🔍 Acción Requerida: Faltan 90 días para verificar y delimitar su responsabilidad administrativa';
+    const dashboardUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`;
 
     try {
       if (!fs.existsSync(templatePath)) {
@@ -469,6 +481,7 @@ export class EmailService {
       } else {
         htmlContent = fs.readFileSync(templatePath, 'utf8');
         htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+        htmlContent = htmlContent.replace(/{{dashboardUrl}}/g, dashboardUrl);
       }
     } catch (error) {
       console.error(
@@ -498,6 +511,7 @@ export class EmailService {
     let htmlContent = '';
     const subject =
       '🚨 ÚLTIMA ALERTA: Solo 20 días para deslindar su responsabilidad administrativa.';
+    const dashboardUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`;
 
     try {
       if (!fs.existsSync(templatePath)) {
@@ -508,6 +522,7 @@ export class EmailService {
       } else {
         htmlContent = fs.readFileSync(templatePath, 'utf8');
         htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+        htmlContent = htmlContent.replace(/{{dashboardUrl}}/g, dashboardUrl);
       }
     } catch (error) {
       console.error(
