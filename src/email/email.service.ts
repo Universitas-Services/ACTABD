@@ -82,6 +82,7 @@ export class EmailService {
     if (isPro) {
       // --- LÓGICA PARA USUARIO PRO ---
       const templatePath = path.join(__dirname, 'templates', 'acta-pro.html');
+      const dashboardUrl = `${this.configService.get<string>('FRONTEND_URL')}/dashboard`; // Asegurando URL del dashboard
 
       try {
         // Leemos la plantilla del archivo
@@ -90,15 +91,16 @@ export class EmailService {
         // Reemplazamos los placeholders básicos
         htmlContent = htmlContent.replace(/{{actaCode}}/g, actaCode);
         htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+        htmlContent = htmlContent.replace(/{{dashboardUrl}}/g, dashboardUrl); // Nueva variable
 
         // Asunto específico para Pro
-        subject = `✅ ¡Misión cumplida! Tu ${actaCode} ha sido generada y está lista para la firma.`;
+        subject = `✅ Tu Acta ${actaCode} ha sido generada y está lista.`;
 
       } catch (error) {
         console.warn('No se encontró acta-pro.html, usando fallback.', error);
         // Fallback simple si falla la lectura del archivo
         htmlContent = `<p>Tu acta Pro ${actaCode} está lista.</p>`;
-        subject = `Tu Acta Pro ${actaCode}`;
+        subject = `Tu Acta ${actaCode}`;
       }
 
     } else {
