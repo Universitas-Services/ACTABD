@@ -1,7 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
-import { JwtService } from '@nestjs/jwt'; // Importa JWT
+import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -10,9 +12,10 @@ describe('AuthService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
-        // 👇 Provee mocks para las dependencias del servicio
         { provide: PrismaService, useValue: {} },
         { provide: JwtService, useValue: {} },
+        { provide: EmailService, useValue: {} },
+        { provide: ConfigService, useValue: {} },
       ],
     }).compile();
 

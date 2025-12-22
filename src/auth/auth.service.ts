@@ -119,6 +119,9 @@ export class AuthService {
         apellido,
         telefono,
         confirmationToken: confirmationToken,
+        role: UserRole.PAID_USER, // Rol especificado por el usuario
+        // isEmailVerified: false, // Default
+        isActive: true,
       },
     });
     console.log(`[register] Usuario ${email} creado con ID: ${newUser.id}`);
