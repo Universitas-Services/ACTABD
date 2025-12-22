@@ -342,7 +342,7 @@ export class AuthService {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
+    const otpExpiresAt = new Date(Date.now() + 60 * 60 * 1000); // 60 minutos
     console.log(
       `[forgotPassword] Generado OTP para ${email}. Guardando en BD...`,
     );
@@ -356,7 +356,11 @@ export class AuthService {
     );
 
     try {
-      await this.emailService.sendPasswordResetOtp(user.email, otp);
+      await this.emailService.sendPasswordResetOtp(
+        user.email,
+        user.nombre,
+        otp,
+      );
       console.log(`[forgotPassword] Email con OTP enviado a ${email}.`);
     } catch (emailError) {
       console.error(

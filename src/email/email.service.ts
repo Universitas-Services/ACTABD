@@ -30,20 +30,30 @@ export class EmailService {
     await this.resend.emails.send({
       from: `Actas de Entrega <${this.fromEmail}>`,
       to: [to],
-      subject: 'Confirma tu cuenta',
+      subject: '✅ ¡Bienvenido! Activa tu cuenta y blinda tu gestión en Actas de Entrega',
       html: htmlContent,
     });
   }
 
-  async sendPasswordResetOtp(to: string, otp: string) {
-    // (Tu lógica de email para OTP va aquí)
-    // ...
-    const htmlContent = `<p>Tu código de reseteo de contraseña es: <strong>${otp}</strong></p>`; // Simplificado
+  async sendPasswordResetOtp(to: string, userName: string, otp: string) {
+    const resetUrl = `${this.configService.get<string>('FRONTEND_URL')}/auth/new-password?token=${otp}`;
+
+    const templatePath = path.join(__dirname, 'templates', 'password-reset.html');
+    let htmlContent = '';
+
+    try {
+      htmlContent = fs.readFileSync(templatePath, 'utf8');
+      htmlContent = htmlContent.replace(/{{userName}}/g, userName);
+      htmlContent = htmlContent.replace(/{{resetUrl}}/g, resetUrl);
+    } catch (error) {
+      console.warn('No se encontró password-reset.html, usando fallback.', error);
+      htmlContent = `<p>Hola ${userName}, tu código de recuperación es: <strong>${otp}</strong></p>`;
+    }
 
     await this.resend.emails.send({
-      from: `Plataforma Actas <${this.fromEmail}>`,
+      from: `Actas de Entrega <${this.fromEmail}>`,
       to: [to],
-      subject: 'Tu código de reseteo de contraseña',
+      subject: '🔑 Recuperación de acceso - Acta de Entrega',
       html: htmlContent,
     });
   }
@@ -148,7 +158,7 @@ export class EmailService {
         <!-- Footer -->
         <div style="text-align: center; color: #888; font-size: 12px; margin-top: 20px;">
           <p>Si tienes alguna pregunta, nuestro equipo está listo para ayudarte.</p>
-          <p>Atentamente,<br>El equipo de Universitas Legal</p>
+          <p>Atentamente,<br>El equipo de Acta de Entrega</p>
         </div>
   
       </div>
