@@ -486,6 +486,29 @@ export class ActasService {
   }
 
   /**
+   * Parsea una fecha tratando de detectar formato DD/MM/YYYY o ISO.
+   */
+  private parseDate(dateStr: string): Date | null {
+    if (!dateStr) return null;
+
+    // Detectar formato DD/MM/YYYY o DD-MM-YYYY
+    const ddmmyyyy = dateStr.match(
+      new RegExp('^(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})$'),
+    );
+    if (ddmmyyyy) {
+      const day = parseInt(ddmmyyyy[1], 10);
+      const month = parseInt(ddmmyyyy[2], 10) - 1; // Meses en JS son 0-index
+      const year = parseInt(ddmmyyyy[3], 10);
+      const date = new Date(year, month, day);
+      return isNaN(date.getTime()) ? null : date;
+    }
+
+    // Fallback estándar (ISO)
+    const date = new Date(dateStr);
+    return isNaN(date.getTime()) ? null : date;
+  }
+
+  /**
    * Calcula cuántos días hábiles faltan entre hoy y la fecha límite.
    * Si strictFechaSuscripcion es true: Devuelve null si no hay fechaSuscripcion.
    * Si strictFechaSuscripcion es false: Usa createdAt como fallback.
@@ -507,10 +530,8 @@ export class ActasService {
     ) {
       const metadata = acta.metadata as { fechaSuscripcion?: string };
       if (metadata.fechaSuscripcion) {
-        const fechaSuscripcion = new Date(metadata.fechaSuscripcion);
-        if (!isNaN(fechaSuscripcion.getTime())) {
-          startDate = fechaSuscripcion;
-        }
+        // USAMOS EL PARSEO ROBUSTO
+        startDate = this.parseDate(metadata.fechaSuscripcion);
       }
     }
 
@@ -574,9 +595,10 @@ export class ActasService {
       metadata.fechaSuscripcion &&
       typeof metadata.fechaSuscripcion === 'string'
     ) {
-      const fechaSuscripcion = new Date(metadata.fechaSuscripcion);
-      if (!isNaN(fechaSuscripcion.getTime())) {
-        startDate = fechaSuscripcion;
+      // USAMOS EL PARSEO ROBUSTO
+      const parsedArg = this.parseDate(metadata.fechaSuscripcion);
+      if (parsedArg) {
+        startDate = parsedArg;
       }
     }
 
