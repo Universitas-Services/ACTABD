@@ -8,14 +8,21 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateActaDto } from '../auth/dto/create-acta.dto';
 import { UpdateActaDto } from '../auth/dto/update-acta.dto';
-import { User, Acta, ActaStatus, Prisma, ActaType } from '@prisma/client';
+import {
+  User,
+  Acta,
+  ActaStatus,
+  Prisma,
+  ActaType,
+  UserRole,
+} from '@prisma/client';
 import { ActaDocxService } from './acta-docx.service';
 import { GetActasFilterDto } from './dto/get-actas-filter.dto';
 import { EmailService } from '../email/email.service';
 
 // Tipo enriquecido para el retorno (intersection type)
 type EnrichedActa = Acta & {
-  diasRestantes?: number;
+  diasRestantes?: number | null;
   alertaVencimiento?: boolean;
 };
 
@@ -63,11 +70,15 @@ export class ActasService {
       const daysRemaining = this.calculateBusinessDaysRemaining(
         nuevaActa,
         3, // Plazo legal Resolución CGR
+        false, // Permitir fallback a createdAt
       );
+
+      // Si por alguna razón es null (no debería con fallback), usamos 0
+      const daysToSend = daysRemaining ?? 0;
 
       // El correo se envía de forma asíncrona sin bloquear la respuesta
       this.emailService
-        .sendFollowUpActaEmail(user.email, user.nombre, daysRemaining)
+        .sendFollowUpActaEmail(user.email, user.nombre, daysToSend)
         .catch((err) =>
           console.error('Error enviando email de seguimiento:', err),
         );
@@ -442,20 +453,53 @@ export class ActasService {
     return currentDate;
   }
 
+  // --- NUEVO MÉTODO PARA ENDPOINT DÍAS RESTANTES (RESTAURADO) ---
+  async getDiasRestantes(id: string, user: User) {
+    const acta = await this.prisma.acta.findUnique({
+      where: { id },
+      select: { createdAt: true, metadata: true, userId: true },
+    });
+
+    if (!acta) {
+      throw new NotFoundException('Acta no encontrada');
+    }
+
+    // VALIDACIÓN DE SEGURIDAD:
+    // Permitir si es ADMIN o si es el DUEÑO del acta
+    if (user.role !== UserRole.ADMIN && acta.userId !== user.id) {
+      throw new ForbiddenException(
+        'No tienes permiso para ver el cálculo de días de esta acta.',
+      );
+    }
+
+    // Usamos el método modificado que prioriza estrictamente fechaSuscripcion
+    const diasRestantes = this.calculateBusinessDaysRemaining(acta, 120);
+
+    return {
+      diasRestantes,
+      // Mensaje explicativo opcional
+      mensaje:
+        diasRestantes !== null
+          ? `Quedan ${diasRestantes} días hábiles.`
+          : 'No se encontró fecha de suscripción para iniciar el conteo.',
+    };
+  }
+
   /**
    * Calcula cuántos días hábiles faltan entre hoy y la fecha límite.
-   * Devuelve negativo si está vencido.
-   * BASE: fechaSuscripcion (metadata) o createdAt.
+   * Si strictFechaSuscripcion es true: Devuelve null si no hay fechaSuscripcion.
+   * Si strictFechaSuscripcion es false: Usa createdAt como fallback.
    */
   public calculateBusinessDaysRemaining(
-    // Hice público para tests si fuera necesario
     acta: { createdAt: Date; metadata: unknown },
     durationInDays: number,
-  ): number {
+    strictFechaSuscripcion: boolean = true, // Default true para cumplir requerimiento de 120 días
+  ): number | null {
     if (durationInDays <= 0) return 0;
 
-    let startDate = new Date(acta.createdAt);
+    let startDate: Date | null = null;
 
+    // 1. Intentamos obtener fechaSuscripcion (Prioridad)
     if (
       typeof acta.metadata === 'object' &&
       acta.metadata !== null &&
@@ -470,33 +514,50 @@ export class ActasService {
       }
     }
 
-    const deadline = this.addBusinessDays(startDate, durationInDays);
-    const today = new Date();
-
-    // Normalizar fechas para ignorar horas (comparar solo la fecha calendario)
-    deadline.setHours(23, 59, 59, 999);
-    today.setHours(0, 0, 0, 0);
-
-    let daysRemaining = 0;
-    const current = new Date(today);
-
-    // Si hoy es igual al deadline, quedan 0 días (vence hoy)
-    if (current.getTime() > deadline.getTime()) {
-      // Caso VENCIDO: Calcular días pasados (como negativo)
-      // Nota: Implementación simple para indicar vencimiento.
-      return -1;
-    }
-
-    // Caso NO VENCIDO: Contar hacia adelante
-    while (current < deadline) {
-      current.setDate(current.getDate() + 1);
-      const dayOfWeek = current.getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-        daysRemaining++;
+    // 2. Si no hay fechaSuscripcion...
+    if (!startDate) {
+      if (strictFechaSuscripcion) {
+        return null; // Modo estricto: requiere fechaSuscripcion
+      } else {
+        startDate = new Date(acta.createdAt); // Fallback: usa createdAt
       }
     }
 
-    return daysRemaining;
+    // A la fecha de inicio se le suman los días HÁBILES
+    const deadline = this.addBusinessDays(startDate, durationInDays);
+    const today = new Date();
+
+    deadline.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+
+    const startCount = new Date(today);
+    const endCount = new Date(deadline);
+    let daysDiff = 0;
+
+    // Determinamos dirección del conteo
+    if (startCount.getTime() < endCount.getTime()) {
+      const current = new Date(startCount);
+      while (current.getTime() < endCount.getTime()) {
+        current.setDate(current.getDate() + 1);
+        const day = current.getDay();
+        if (day !== 0 && day !== 6) {
+          daysDiff++;
+        }
+      }
+      return daysDiff;
+    } else if (startCount.getTime() > endCount.getTime()) {
+      const current = new Date(endCount);
+      while (current.getTime() < startCount.getTime()) {
+        current.setDate(current.getDate() + 1);
+        const day = current.getDay();
+        if (day !== 0 && day !== 6) {
+          daysDiff--;
+        }
+      }
+      return daysDiff;
+    } else {
+      return 0;
+    }
   }
 
   /**

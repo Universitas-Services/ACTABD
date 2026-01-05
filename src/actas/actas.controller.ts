@@ -143,6 +143,30 @@ export class ActasController {
     return this.actasService.getActaInfoForAdmin(id);
   }
 
+  @Get(':id/dias-restantes')
+  @ApiOperation({
+    summary:
+      'Obtener días restantes para la revisión (basado en fechaSuscripcion)',
+  })
+  @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Días restantes calculados.',
+    schema: {
+      type: 'object',
+      properties: {
+        diasRestantes: { type: 'number', nullable: true },
+        mensaje: { type: 'string' },
+      },
+    },
+  })
+  getDiasRestantes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ) {
+    return this.actasService.getDiasRestantes(id, user);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un acta específica por ID' })
   @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
