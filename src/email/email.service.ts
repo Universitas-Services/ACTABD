@@ -172,6 +172,34 @@ export class EmailService {
   }
 
   /**
+   * Envía alerta de ventas cuando un usuario solicita información Pro.
+   */
+  async sendProInfoAlert(userEmail: string) {
+    const salesEmail = 'universitas.edu@gmail.com';
+    const subject = 'ALERTA venta actas de entrega pro';
+    const htmlContent = `
+      <p>Estimado equipo de Ventas,</p>
+      <p>Por favor contactar al usuario <strong>${userEmail}</strong>, ya que desea información de Actas de Entrega Pro.</p>
+    `;
+
+    try {
+      await this.resend.emails.send({
+        from: `Alerta Plataforma <${this.fromEmail}>`,
+        to: [salesEmail],
+        subject: subject,
+        html: htmlContent,
+      });
+      console.log(`Alerta de ventas enviada para el usuario ${userEmail}`);
+    } catch (error) {
+      console.error(
+        'Error enviando alerta de ventas para:',
+        userEmail,
+        error,
+      );
+    }
+  }
+
+  /**
    * NUEVA FUNCIÓN: Envía el Reporte de Compliance
    */
   async sendComplianceReport(

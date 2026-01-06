@@ -63,6 +63,18 @@ export class ActasService {
       },
     });
 
+    // --- ALERTA VENTAS (Interés Pro) ---
+    if (
+      metadataCompleto &&
+      (metadataCompleto as { interesProducto?: string }).interesProducto ===
+        'SI'
+    ) {
+      this.emailService
+        .sendProInfoAlert(user.email)
+        .catch((err) => console.error('Error enviando alerta ventas:', err));
+    }
+    // ----------------------------------
+
     // Enviar correo de seguimiento personalizado tras el primer guardado
     // Según Resolución N.º 01-00-0162, el plazo es de 3 días hábiles.
     try {
@@ -361,6 +373,18 @@ export class ActasService {
         newMetadata.nombreEntidad = nombreEntidad;
         newMetadata.nombreOrgano = nombreEntidad;
       }
+
+      // --- ALERTA VENTAS (Interés Pro) ---
+      // Verificamos si en este update se está enviando interesProducto === 'SI'
+      if (
+        metadata &&
+        (metadata as { interesProducto?: string }).interesProducto === 'SI'
+      ) {
+        this.emailService
+          .sendProInfoAlert(user.email)
+          .catch((err) => console.error('Error enviando alerta ventas:', err));
+      }
+      // ----------------------------------
 
       // --- LOGICA NUEVA PARA RESETEAR NOTIFICACIONES ---
       // Si cambia la fecha de suscripción, debemos reiniciar el contador de notificaciones
