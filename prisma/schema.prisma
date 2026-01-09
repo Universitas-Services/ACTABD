@@ -78,7 +78,25 @@ model Acta {
   isCompleted   Boolean      @default(false)
   tiempoRealizacion Int      @default(0) // Tiempo para realizar el acta (0, 1, 2, 3)
   notificationsSent Json?    // Array de strings, ej: ["30_DAYS", "100_DAYS"]
+  
+  // Relación con observaciones generadas por IA
+  observaciones ActaObservacion[]
 }
+
+model ActaObservacion {
+  id             String   @id @default(uuid())
+  actaId         String
+  acta           Acta     @relation(fields: [actaId], references: [id], onDelete: Cascade)
+  
+  totalHallazgos Int
+  analisis       Json     // Array de hallazgos con observaciones legales
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("acta_observaciones")
+}
+
 
 model ChatHistory {
   id          String   @id @default(uuid())
