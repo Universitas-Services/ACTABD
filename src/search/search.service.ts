@@ -197,7 +197,7 @@ export class SearchService {
             criterio: findingData.criterio,
             respuesta: respuesta,
             observacion_legal: geminiObservation,
-            documentos_soporte: vertexResult.documents,
+            // NO guardamos documentos_soporte para ahorrar espacio en BD
           });
         }
       }
@@ -314,22 +314,38 @@ ${context}
     };
   }
 
-  async getAllObservaciones(actaId: string) {
-    const observaciones = await this.prisma.actaObservacion.findMany({
+  async regenerarObservaciones(actaId: string) {
+    // 1. Generar nuevas observaciones
+    const resultado = await this.analyzeActa(actaId);
+
+    // 2. Buscar si ya existe una observación para esta acta
+    const observacionExistente = await this.prisma.actaObservacion.findFirst({
       where: { actaId },
       orderBy: { createdAt: 'desc' },
     });
 
-    return observaciones.map((obs) => ({
-      id: obs.id,
-      actaId: obs.actaId,
-      totalHallazgos: obs.totalHallazgos,
-      analisis: obs.analisis,
-      createdAt: obs.createdAt,
-    }));
-  }
+    if (observacionExistente) {
+      // 3. Actualizar la observación existente (UPDATE)
+      const observacionActualizada = await this.prisma.actaObservacion.update({
+        where: { id: observacionExistente.id },
+        data: {
+          totalHallazgos: resultado.total_hallazgos,
+          analisis: resultado.analisis as any,
+          updatedAt: new Date(),
+        },
+      });
 
-  async regenerarObservaciones(actaId: string) {
-    return this.analyzeAndSave(actaId);
+      return {
+        id: observacionActualizada.id,
+        actaId: observacionActualizada.actaId,
+        totalHallazgos: observacionActualizada.totalHallazgos,
+        analisis: observacionActualizada.analisis,
+        createdAt: observacionActualizada.createdAt,
+        updatedAt: observacionActualizada.updatedAt,
+      };
+    } else {
+      // 4. Si no existe, crear una nueva (primera vez)
+      return this.analyzeAndSave(actaId);
+    }
   }
 }
