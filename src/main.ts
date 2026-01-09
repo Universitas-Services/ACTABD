@@ -37,6 +37,7 @@ async function bootstrap() {
       'https://app.actadeentrega.site',
       'https://admin.actadeentrega.site',
       'https://app.actadeentrega.online',
+      'https://admin.actadeentrega.online',
     ],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
