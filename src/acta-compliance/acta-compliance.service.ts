@@ -536,10 +536,9 @@ export class ActaComplianceService {
   }
 
   private generateSummary(score: number): string {
-    if (score >= 90) return 'Nivel Alto o Crítico';
-    if (score >= 75) return 'Nivel Intermedio';
-    if (score >= 50) return 'Nivel Bajo';
-    return 'Nivel Muy Bajo';
+    if (score <= 50) return 'Alto o Crítico';
+    if (score <= 75) return 'Intermedio';
+    return 'Bajo o Leve';
   }
 
   private generateHtmlContent(
@@ -613,10 +612,17 @@ export class ActaComplianceService {
     });
 
     // Nivel de Riesgo
-    let nivelRiesgoText = 'Nivel Muy Bajo';
-    if (puntaje >= 90) nivelRiesgoText = 'Alto o Crítico';
-    else if (puntaje >= 75) nivelRiesgoText = 'Intermedio';
-    else if (puntaje >= 50) nivelRiesgoText = 'Bajo';
+    let nivelRiesgoText = '';
+    if (puntaje <= 50) {
+      nivelRiesgoText =
+        'Los incumplimientos han sido clasificados en un nivel Alto o Crítico';
+    } else if (puntaje <= 75) {
+      nivelRiesgoText =
+        'Los incumplimientos han sido clasificados en un nivel Intermedio';
+    } else {
+      nivelRiesgoText =
+        'Los incumplimientos han sido clasificados en un nivel Bajo o Leve';
+    }
 
     const nivelRiesgoSection = `
       <div class="section">

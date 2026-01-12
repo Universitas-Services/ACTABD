@@ -103,4 +103,11 @@ export class ActaResponseDto implements Acta {
     example: false,
   })
   alertaVencimiento?: boolean;
+
+  @ApiProperty({
+    description: 'Indica si el acta tiene observaciones registradas',
+    required: false,
+    example: true,
+  })
+  tieneObservaciones?: boolean;
 }
