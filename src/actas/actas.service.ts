@@ -197,6 +197,9 @@ export class ActasService {
           isCompleted: true, // Incluimos isCompleted en la respuesta
           tiempoRealizacion: true, // <-- Necesario para el cálculo
           metadata: true, // <-- Necesario para fechaSuscripcion
+          _count: {
+            select: { observaciones: true },
+          },
         },
       }),
     ]);
@@ -212,7 +215,10 @@ export class ActasService {
 
       const alertaVencimiento = this.checkIfLate(acta);
 
-      return { ...acta, diasRestantes, alertaVencimiento };
+      const tieneObservaciones = (acta as any)._count?.observaciones > 0;
+      const { _count, ...rest } = acta as any;
+
+      return { ...rest, diasRestantes, alertaVencimiento, tieneObservaciones };
     });
 
     return {
@@ -281,6 +287,9 @@ export class ActasService {
               email: true,
             },
           },
+          _count: {
+            select: { observaciones: true },
+          },
         },
       }),
     ]);
@@ -289,10 +298,13 @@ export class ActasService {
     const data = actas.map((acta) => {
       const diasRestantes = this.calculateBusinessDaysRemaining(acta, 120);
       const alertaVencimiento = this.checkIfLate(acta);
+      const tieneObservaciones = (acta as any)._count?.observaciones > 0;
+      const { _count, ...rest } = acta as any;
       return {
-        ...acta,
+        ...rest,
         diasRestantes,
         alertaVencimiento,
+        tieneObservaciones,
       };
     });
 
