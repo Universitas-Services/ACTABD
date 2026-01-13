@@ -349,11 +349,7 @@ export class ActasService {
     const currentActa = await this.findOneForUser(id, user);
 
     // --- VALIDACIÓN DE BLOQUEO (DESHABILITADA POR SOLICITUD) ---
-    // if (currentActa.status === ActaStatus.ENTREGADA) {
-    //   throw new ForbiddenException(
-    //     'El acta está marcada como ENTREGADA y no se puede editar.',
-    //   );
-    // }
+    // (Código eliminado para permitir edición en ENTREGADA con reversión de estado)
     // -----------------------------
 
     const { nombreEntidad, type, metadata, tiempoRealizacion, createdAt } =
@@ -424,6 +420,13 @@ export class ActasService {
       // Si se completa y su estado previo era GUARDADA, la pasamos a COMPLETADA
       if (isCompleted && currentActa.status === ActaStatus.GUARDADA) {
         dataToUpdate.status = ActaStatus.COMPLETADA;
+      }
+
+      // LOGICA NUEVA: Si estaba ENTREGADA y se edita, volver a COMPLETADA (o GUARDADA si falta data)
+      if (currentActa.status === ActaStatus.ENTREGADA) {
+        dataToUpdate.status = isCompleted
+          ? ActaStatus.COMPLETADA
+          : ActaStatus.GUARDADA;
       }
     }
 
