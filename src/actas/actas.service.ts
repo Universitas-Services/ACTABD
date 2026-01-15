@@ -146,7 +146,7 @@ export class ActasService {
       return false;
     }
     // Cuenta las llaves del objeto JSON
-    return Object.keys(metadata as Record<string, any>).length >= 54;
+    return Object.keys(metadata as Record<string, any>).length >= 50;
   }
   // -----------------------------
 
