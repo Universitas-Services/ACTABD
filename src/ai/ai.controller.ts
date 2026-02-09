@@ -23,6 +23,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiTags,
+  ApiQuery,
 } from '@nestjs/swagger';
 @ApiTags('Chatbot AI') // <-- Agrupa bajo "Chatbot AI"
 @ApiBearerAuth()
@@ -170,6 +171,13 @@ export class AiController {
   @ApiResponse({
     status: HttpStatus.NOT_FOUND,
     description: 'Usuario no encontrado.',
+  })
+  @ApiQuery({
+    name: 'sessionId',
+    required: false,
+    description:
+      'ID de sesión opcional. Si se proporciona, solo devuelve mensajes de esa sesión específica. Si no se proporciona, devuelve todas las conversaciones del usuario.',
+    type: String,
   })
   async getUserConversations(
     @Param('userId') userId: string,
