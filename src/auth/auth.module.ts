@@ -19,12 +19,12 @@ import { EmailModule } from '../email/email.module'; // Importa EmailModule
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        signOptions: { expiresIn: '15m' }, // Expiración corta para el access token
+        signOptions: { expiresIn: '50m' }, // Expiración corta para el access token
       }),
     }),
   ],
   controllers: [AuthController], // <-- AÑADE UNA COMA AQUÍ
   providers: [AuthService, JwtStrategy, RefreshTokenStrategy], // Esta es la línea que estabas añadiendo
-  exports: [JwtStrategy, PassportModule],
+  exports: [JwtStrategy, PassportModule, AuthService],
 })
 export class AuthModule {}

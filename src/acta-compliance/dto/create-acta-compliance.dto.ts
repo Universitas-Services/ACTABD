@@ -1,7 +1,8 @@
 // src/acta-compliance/dto/create-acta-compliance.dto.ts
 
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsDateString, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsDate } from 'class-validator';
+import { Type } from 'class-transformer';
 
 // 1. Definimos el Enum con las únicas respuestas válidas
 export enum RespuestaCompliance {
@@ -45,7 +46,8 @@ export class BaseActaComplianceDto {
 
   @ApiProperty({ required: false, example: '2025-10-29' })
   @IsOptional()
-  @IsDateString()
+  @IsDate()
+  @Type(() => Date)
   fecha_revision?: Date;
 
   @ApiProperty({ required: false, example: 'DOC-EXTERNO-001' })

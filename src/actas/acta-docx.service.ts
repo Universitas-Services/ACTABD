@@ -123,14 +123,18 @@ const anexosMap: Record<string, AnexoInfo> = {
   // Mapeamos 'disponeCuadroResumenCargos' a Anexo_26 (Cuadro resumen).
   // Si necesitas Anexo_25 (Mención de número de cargos), verifica si usas esa clave en el front.
   disponeCuadroResumenCargos: {
-    key: 'Anexo_26',
+    key: 'Anexo_25',
     text: '-Cuadro resumen indicando el número de cargos existentes y clasificación.',
+  },
+  disponeCuadroResumenValidadoRRHH: {
+    key: 'Anexo_26',
+    text: '-Cuadro resumen validado por la Oficina de Recursos Humanos.',
   },
   disponeReporteNominas: {
     key: 'Anexo_27',
     text: '-Reporte de Nóminas a la fecha del cese de funciones.',
   },
-  
+
   // --- ANEXO TERCERO: Bienes ---
   disponeInventarioBienes: {
     key: 'Anexo_28',
@@ -140,8 +144,14 @@ const anexosMap: Record<string, AnexoInfo> = {
   // --- ANEXO CUARTO: Plan Operativo ---
   disponeEjecucionPlanOperativo: {
     key: 'Anexo_29',
-    text: '-Ejecución del Plan Operativo Anual de conformidad con objetivos y metas.',
+    text: '-Ejecución del Plan Operativo a la fecha de entrega.',
   },
+
+  incluyeCausasIncumplimientoMetas: {
+    key: 'Anexo_30',
+    text: '-Detalles de las causas que originaron el incumplimiento de algunas metas.',
+  },
+
   // Si tienes una clave específica para "fecha entrega POA", úsala aquí.
   // Asumo que si hay ejecución, se incluye.
   disponePlanOperativoAnual: {
@@ -152,11 +162,14 @@ const anexosMap: Record<string, AnexoInfo> = {
   // --- ANEXO QUINTO: Archivo ---
   // Tu JSON tiene 'disponeClasificacionArchivo'. El Anexo 33 es Clasificación.
   disponeClasificacionArchivo: {
-    key: 'Anexo_33',
+    key: 'Anexo_32',
     text: '-Documento con la clasificación del archivo.',
   },
   // Si necesitas el índice (Anexo 32), agrega la clave correspondiente si la tienes.
-
+  incluyeUbicacionFisicaArchivo: {
+    key: 'Anexo_33',
+    text: '-Indica ubicación física.',
+  },
   // --- ANEXO SEXTO: Información Adicional y Tesorería ---
   disponeRelacionMontosFondosAsignados: {
     key: 'Anexo_34',
@@ -254,7 +267,7 @@ const anexosMap: Record<string, AnexoInfo> = {
 
 @Injectable()
 export class ActaDocxService {
-  constructor(private readonly emailService: EmailService) {}
+  constructor(private readonly emailService: EmailService) { }
 
   async generarDocxBuffer(acta: Acta): Promise<Buffer> {
     try {
@@ -266,8 +279,11 @@ export class ActaDocxService {
         acta.metadata as Record<string, unknown>,
       );
 
+      // Limpiar HTML antes de convertir a DOCX para evitar espacios innecesarios
+      const htmlLimpio = this.limpiarHtmlParaDocx(htmlContent);
+
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      const fileBuffer = await HTMLtoDOCX(htmlContent, null, {
+      const fileBuffer = await HTMLtoDOCX(htmlLimpio, null, {
         table: { row: { cantSplit: true } },
         footer: false,
         header: false,
@@ -296,11 +312,40 @@ export class ActaDocxService {
       const fileBuffer = await this.generarDocxBuffer(acta);
       const filename = `Acta-Entrega-${acta.numeroActa}.docx`;
 
+      // LÓGICA PARA EL CÓDIGO DEL ACTA (M.A, S, E)
+      let prefix = '';
+      switch (acta.type) {
+        case ActaType.MAXIMA_AUTORIDAD_GRATIS:
+        case ActaType.MAXIMA_AUTORIDAD_PAGA:
+          prefix = 'M.A';
+          break;
+        case ActaType.SALIENTE_GRATIS:
+        case ActaType.SALIENTE_PAGA:
+          prefix = 'S';
+          break;
+        case ActaType.ENTRANTE_GRATIS:
+        case ActaType.ENTRANTE_PAGA:
+          prefix = 'E';
+          break;
+        default:
+          prefix = 'REF'; // Valor por defecto
+      }
+
+      const actaCode = `${prefix}-${acta.numeroActa}`;
+
+      // DETECTAR SI ES PRO
+      const isPro =
+        acta.type === ActaType.MAXIMA_AUTORIDAD_PAGA ||
+        acta.type === ActaType.SALIENTE_PAGA ||
+        acta.type === ActaType.ENTRANTE_PAGA;
+
       await this.emailService.sendActaDocxAttachment(
         userEmail,
         fileBuffer,
         filename,
         userName,
+        actaCode,
+        isPro,
       );
     } catch (error: unknown) {
       const actaId = acta?.id ?? 'ID no disponible';
@@ -355,7 +400,7 @@ export class ActaDocxService {
     rawData: Record<string, unknown>,
   ): string {
     let htmlContent = html;
-    
+
     // PASO 1: Pre-procesar los datos (Lógica para Anexos)
     const processedData: Record<string, unknown> = { ...rawData };
 
@@ -363,7 +408,7 @@ export class ActaDocxService {
     for (const userKey in anexosMap) {
       if (Object.prototype.hasOwnProperty.call(anexosMap, userKey)) {
         const anexoInfo = anexosMap[userKey];
-        
+
         // Buscamos el valor en la metadata usando la clave que viene del frontend (ej: disponeReporteNominas)
         const respuestaUsuario =
           (rawData[userKey] as string | undefined)?.toString() || '';
@@ -380,9 +425,30 @@ export class ActaDocxService {
       }
     }
 
-    // PASO 2: Eliminación de párrafos vacíos ({{Anexo_XX}})
+    // --- LÓGICA MANUAL ADICIONAL (Anexo_VI, Anexo_VII, VER_ANEXO_7) ---
+
+    // 1. Anexo_VI: Si existe, se añade "<br>VER ANEXO"
+    const anexoVI = (rawData['Anexo_VI'] as string | undefined) || '';
+    if (anexoVI.trim()) {
+      processedData['Anexo_VI'] = `${anexoVI.trim()}<br>VER ANEXO`;
+    }
+
+    // 2. Anexo_VII y VER_ANEXO_7
+    const anexoVII = (rawData['Anexo_VII'] as string | undefined) || '';
+    if (anexoVII && anexoVII.trim().toLowerCase() !== 'no aplica') {
+      processedData['Anexo_VII'] = `<strong>Anexo Séptimo: Otros anexos del acta:</strong> ${anexoVII.trim()}`;
+      processedData['VER_ANEXO_7'] = 'VER ANEXO';
+    } else {
+      processedData['Anexo_VII'] = '';
+      processedData['VER_ANEXO_7'] = '';
+    }
+
+    // PASO 2: Eliminación de párrafos vacíos ({{Anexo_XX}} y {{VER_ANEXO_XX}})
     for (const key in processedData) {
-      if (key.startsWith('Anexo_') && processedData[key] === '') {
+      if (
+        (key.startsWith('Anexo_') || key.startsWith('VER_ANEXO_')) &&
+        processedData[key] === ''
+      ) {
         const regex = new RegExp(
           `<p[^>]*>\\s*{{${key}}}\\s*<\\/p>[\\r\\n]*`,
           'g',
@@ -399,7 +465,7 @@ export class ActaDocxService {
 
       const placeholder = new RegExp(`{{${key}}}`, 'g');
       let stringValue = '';
-      
+
       if (
         typeof value === 'string' ||
         typeof value === 'number' ||
@@ -414,5 +480,21 @@ export class ActaDocxService {
     htmlContent = htmlContent.replace(/{{[^}]+}}/g, '');
 
     return htmlContent;
+  }
+
+  /**
+   * Limpia el HTML para evitar espacios innecesarios en el documento DOCX.
+   * Elimina saltos de línea entre tags y normaliza espacios múltiples.
+   */
+  private limpiarHtmlParaDocx(html: string): string {
+    return (
+      html
+        // Eliminar saltos de línea y espacios entre tags
+        .replace(/>\s+</g, '><')
+        // Normalizar espacios múltiples dentro del contenido a un solo espacio
+        .replace(/\s{2,}/g, ' ')
+        // Eliminar espacios al inicio y final
+        .trim()
+    );
   }
 }

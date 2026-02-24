@@ -20,9 +20,9 @@ enum UserRole {
 
 model User {
   id                String    @id @default(uuid())
-  email             String    @unique @default(cuid())
-  password          String    @default("123456")
-  nombre            String    @default("Usuario")
+  email             String    @unique
+  password          String
+  nombre            String
   apellido          String?
   role              UserRole  @default(USER)
   
@@ -59,6 +59,8 @@ model UserProfile {
 }
 enum ActaStatus {
   GUARDADA
+  COMPLETADA // > 54 datos
+  ENTREGADA  // Bloqueada para edición
   DESCARGADA
   ENVIADA
 }
@@ -74,8 +76,27 @@ model Acta {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @default(now()) @updatedAt // Añadido @default(now())
   isCompleted   Boolean      @default(false)
-
+  tiempoRealizacion Int      @default(0) // Tiempo para realizar el acta (0, 1, 2, 3)
+  notificationsSent Json?    // Array de strings, ej: ["30_DAYS", "100_DAYS"]
+  
+  // Relación con observaciones generadas por IA
+  observaciones ActaObservacion[]
 }
+
+model ActaObservacion {
+  id             String   @id @default(uuid())
+  actaId         String
+  acta           Acta     @relation(fields: [actaId], references: [id], onDelete: Cascade)
+  
+  totalHallazgos Int
+  analisis       Json     // Array de hallazgos con observaciones legales
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@map("acta_observaciones")
+}
+
 
 model ChatHistory {
   id          String   @id @default(uuid())

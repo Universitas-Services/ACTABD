@@ -30,7 +30,7 @@ export class ActaComplianceService {
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
     private readonly configService: ConfigService,
-  ) {}
+  ) { }
 
   /**
    * Crea un nuevo registro de cumplimiento (checklist)
@@ -59,17 +59,37 @@ export class ActaComplianceService {
       return newCompliance;
     } catch (error) {
       console.error('Error al crear el registro de compliance:', error);
+      console.error('Error al crear el registro de compliance:', error);
+      // 🔥 DEBUG: Exponer el error real para que el usuario lo vea en Postman
       throw new InternalServerErrorException(
-        'No se pudo crear el registro de cumplimiento.',
+        `No se pudo crear el registro de cumplimiento. Detalle: ${error instanceof Error ? error.message : JSON.stringify(error)
+        }`,
       );
     }
   }
 
-  // 👇 3. MÉTODO PRIVADO PARA GENERAR EL CONSECUTIVO
   private async generarNumeroCompliance(): Promise<string> {
-    const count = await this.prisma.actaCompliance.count();
+    // Buscamos el último registro ordenado por fecha de creación descendente
+    const lastRecord = await this.prisma.actaCompliance.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { numeroCompliance: true }, // Solo necesitamos el número
+    });
+
+    let newNumber = 1;
+
+    if (lastRecord && lastRecord.numeroCompliance) {
+      // Extraemos la parte numérica: "COMP-0005" -> "0005" -> 5
+      const parts = lastRecord.numeroCompliance.split('-');
+      if (parts.length === 2) {
+        const lastNum = parseInt(parts[1], 10);
+        if (!isNaN(lastNum)) {
+          newNumber = lastNum + 1;
+        }
+      }
+    }
+
     // Genera algo como "COMP-0001", "COMP-0002", etc.
-    return `COMP-${(count + 1).toString().padStart(4, '0')}`;
+    return `COMP-${newNumber.toString().padStart(4, '0')}`;
   }
 
   /**
@@ -87,7 +107,7 @@ export class ActaComplianceService {
 
     // 2. Filtro por Estatus (con corrección de tipo)
     if (status) {
-      where.status = status; 
+      where.status = status;
     }
 
     // 3. Búsqueda EXCLUSIVA por Número de Compliance (Lo que tú pediste)
@@ -126,6 +146,62 @@ export class ActaComplianceService {
         page,
         lastPage: Math.ceil(total / limit),
         limit,
+      },
+    };
+  }
+
+  /**
+   * Obtiene TODAS las auditorías (ADMIN) con filtros avanzados
+   */
+  async findAll(filterDto: GetComplianceFilterDto) {
+    const { search, status, userId, page = 1, limit = 10 } = filterDto;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.ActaComplianceWhereInput = {};
+
+    if (userId) {
+      where.userId = userId; // <-- Aplica filtro de usuario
+    }
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (search) {
+      where.OR = [
+        { numeroCompliance: { contains: search, mode: 'insensitive' } },
+        { rif_organo_entidad: { contains: search, mode: 'insensitive' } },
+        { nombre_organo_entidad: { contains: search, mode: 'insensitive' } },
+        { codigo_documento_revisado: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, data] = await this.prisma.$transaction([
+      this.prisma.actaCompliance.count({ where }),
+      this.prisma.actaCompliance.findMany({
+        where,
+        take: +limit,
+        skip,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page: +page,
+        lastPage: Math.ceil(total / +limit),
+        limit: +limit,
       },
     };
   }
@@ -193,11 +269,40 @@ export class ActaComplianceService {
   // --- GENERACIÓN DE PDF ---
 
   /**
-   * Genera el buffer del PDF para un checklist específico
+   * Obtiene un checklist por ID (Sin verificar propiedad - USO INTERNO/ADMIN)
+   */
+  async findOneById(id: string) {
+    const compliance = await this.prisma.actaCompliance.findUnique({
+      where: { id },
+    });
+    if (!compliance) {
+      throw new NotFoundException('Registro de cumplimiento no encontrado.');
+    }
+    return compliance;
+  }
+
+  // --- GENERACIÓN DE PDF ---
+
+  /**
+   * Genera el buffer del PDF para un checklist específico (Usuario Normal)
    */
   async generatePdfBuffer(id: string, user: User): Promise<Buffer> {
     const complianceData = await this.findOneForUser(id, user);
+    return this._generatePdfFromData(complianceData);
+  }
 
+  /**
+   * Genera el buffer del PDF para un checklist específico (ADMIN)
+   */
+  async generatePdfBufferAdmin(id: string): Promise<Buffer> {
+    const complianceData = await this.findOneById(id);
+    return this._generatePdfFromData(complianceData);
+  }
+
+  /**
+   * Lógica interna para generar PDF desde datos
+   */
+  private async _generatePdfFromData(complianceData: any): Promise<Buffer> {
     const htmlContent = this.generateHtmlContent(
       complianceData as unknown as CreateActaComplianceDto,
       complianceData.puntajeCalculado ?? 0,
@@ -207,12 +312,11 @@ export class ActaComplianceService {
     let browser: puppeteer.Browser | undefined;
     try {
       browser = await puppeteer.launch({
-        // Si existe la variable de entorno (Docker), úsala. Si no (Local), usa la default.
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, 
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage', // Importante para contenedores con poca memoria
+          '--disable-dev-shm-usage',
         ],
         headless: true,
       });
@@ -247,21 +351,24 @@ export class ActaComplianceService {
       const pdfBuffer = await this.generatePdfBuffer(id, user);
       const complianceData = await this.findOneForUser(id, user);
 
-      const fileName = `Reporte_Compliance_${
-        complianceData.nombre_organo_entidad || 'Acta'
-      }_${new Date(
-        complianceData.fecha_revision || Date.now(),
-      ).toLocaleDateString('es-VE')}.pdf`;
+      const fileName = `Reporte_Compliance_${complianceData.nombre_organo_entidad || 'Acta'
+        }_${new Date(
+          complianceData.fecha_revision || Date.now(),
+        ).toLocaleDateString('es-VE')}.pdf`;
       const reportDate = new Date(
         complianceData.fecha_revision || Date.now(),
       ).toLocaleDateString('es-VE');
 
-      await this.emailService.sendReportWithAttachment(
-        user.email,
+      // PRIORITY: Correo del registro > Correo del usuario (Fallback)
+      const complianceAny = complianceData as any;
+      const emailDestino = complianceAny.correo_electronico || user.email;
+
+      await this.emailService.sendComplianceReport(
+        emailDestino,
         pdfBuffer,
         fileName,
-        user.nombre,
-        reportDate,
+        complianceData.numeroCompliance || 'S/N',
+        complianceData.puntajeCalculado || 0,
       );
 
       return {
@@ -429,10 +536,9 @@ export class ActaComplianceService {
   }
 
   private generateSummary(score: number): string {
-    if (score >= 90) return 'Nivel Alto o Crítico';
-    if (score >= 75) return 'Nivel Intermedio';
-    if (score >= 50) return 'Nivel Bajo';
-    return 'Nivel Muy Bajo';
+    if (score <= 50) return 'Alto o Crítico';
+    if (score <= 75) return 'Intermedio';
+    return 'Bajo o Leve';
   }
 
   private generateHtmlContent(
@@ -506,10 +612,17 @@ export class ActaComplianceService {
     });
 
     // Nivel de Riesgo
-    let nivelRiesgoText = 'Nivel Muy Bajo';
-    if (puntaje >= 90) nivelRiesgoText = 'Alto o Crítico';
-    else if (puntaje >= 75) nivelRiesgoText = 'Intermedio';
-    else if (puntaje >= 50) nivelRiesgoText = 'Bajo';
+    let nivelRiesgoText = '';
+    if (puntaje <= 50) {
+      nivelRiesgoText =
+        'Los incumplimientos han sido clasificados en un nivel Alto o Crítico';
+    } else if (puntaje <= 75) {
+      nivelRiesgoText =
+        'Los incumplimientos han sido clasificados en un nivel Intermedio';
+    } else {
+      nivelRiesgoText =
+        'Los incumplimientos han sido clasificados en un nivel Bajo o Leve';
+    }
 
     const nivelRiesgoSection = `
       <div class="section">
@@ -565,23 +678,23 @@ export class ActaComplianceService {
           <table class="header-table">
             <tr>
               <td>ENTE U ORGANISMO:</td>
-              <td>${createDto.nombre_organo_entidad || ''}</td>
+              <td>${createDto.nombre_organo_entidad || 'NO APLICA'}</td>
               <td>UNIDAD REVISORA:</td>
-              <td>${createDto.nombre_unidad_revisora || ''}</td>
+              <td>${createDto.nombre_unidad_revisora || 'NO APLICA'}</td>
             </tr>
             <tr>
               <td>CÓDIGO:</td>
-              <td>${createDto.codigo_documento_revisado || ''}</td>
+              <td>${createDto.codigo_documento_revisado || 'NO APLICA'}</td>
               <td>ELABORADO POR:</td>
-              <td>${createDto.nombre_completo_revisor || ''}</td>
+              <td>${createDto.nombre_completo_revisor || 'NO APLICA'}</td>
             </tr>
             <tr>
               <td>REVISADO POR:</td>
-              <td>${createDto.nombre_completo_revisor || ''}</td>
+              <td>${createDto.nombre_completo_revisor || 'NO APLICA'}</td>
               <td>FECHA:</td>
               <td>${new Date(
-                createDto.fecha_revision || Date.now(),
-              ).toLocaleDateString('es-VE')}</td>
+      createDto.fecha_revision || Date.now(),
+    ).toLocaleDateString('es-VE')}</td>
             </tr>
           </table>
 
@@ -612,8 +725,12 @@ export class ActaComplianceService {
       if (respuesta === RespuestaCompliance.SI) {
         cumpleText = 'SI';
         cumpleClass = 'cumple-si';
-      } else if (respuesta === RespuestaCompliance.NO_APLICA) {
-        cumpleText = 'N/A';
+      } else if (
+        respuesta === RespuestaCompliance.NO_APLICA ||
+        respuesta === null ||
+        respuesta === undefined
+      ) {
+        cumpleText = 'NO APLICA';
         cumpleClass = 'cumple-na';
       }
 
@@ -647,19 +764,17 @@ export class ActaComplianceService {
           ${ejecutivoSummary}
           ${alcanceSection}
 
-          ${
-            hallazgosListItems
-              ? `<div class="section"><h3>HALLAZGOS</h3><ul>${hallazgosListItems}</ul></div>`
-              : ''
-          }
+          ${hallazgosListItems
+        ? `<div class="section"><h3>HALLAZGOS</h3><ul>${hallazgosListItems}</ul></div>`
+        : ''
+      }
           ${implicacionesSection}
           ${nivelRiesgoSection}
           ${solucionesSection}
-          ${
-            observacionesListItems
-              ? `<div class="section"><h3>OBSERVACIONES AL ACTA DE ENTREGA (ANEXO)</h3><ul>${observacionesListItems}</ul></div>`
-              : ''
-          }
+          ${observacionesListItems
+        ? `<div class="section"><h3>OBSERVACIONES AL ACTA DE ENTREGA (ANEXO)</h3><ul>${observacionesListItems}</ul></div>`
+        : ''
+      }
           
           <div class="footer-info">
             <p>Lugar y Fecha del Informe de Revisión<br>[Ciudad, Fecha]</p>
@@ -671,5 +786,74 @@ export class ActaComplianceService {
     `;
 
     return html;
+  }
+  // --- REPORTES ADMIN ---
+
+  async getStats() {
+    // 1. Total absolute de auditorías
+    const totalCompliance = await this.prisma.actaCompliance.count();
+
+    // 2. Agrupación por status
+    const groupedStats = await this.prisma.actaCompliance.groupBy({
+      by: ['status'],
+      _count: {
+        status: true,
+      },
+    });
+
+    // 3. Inicializar todos los estados en 0
+    const statsByStatus: Record<ActaStatus, number> = {
+      [ActaStatus.GUARDADA]: 0,
+      [ActaStatus.COMPLETADA]: 0,
+      [ActaStatus.ENTREGADA]: 0,
+      [ActaStatus.DESCARGADA]: 0,
+      [ActaStatus.ENVIADA]: 0,
+    };
+
+    // 4. Llenar con datos reales
+    groupedStats.forEach((group) => {
+      if (statsByStatus[group.status] !== undefined) {
+        statsByStatus[group.status] = group._count.status;
+      }
+    });
+
+    // 5. Métrica personalizada (Solicitada: guardada + descargada + enviada)
+    const totalRelevantes =
+      statsByStatus[ActaStatus.GUARDADA] +
+      statsByStatus[ActaStatus.DESCARGADA] +
+      statsByStatus[ActaStatus.ENVIADA];
+
+    return {
+      totalCompliance,
+      totalRelevantes,
+      statsByStatus,
+    };
+  }
+  async getComplianceInfoForAdmin(id: string) {
+    const compliance = await this.prisma.actaCompliance.findUnique({
+      where: { id },
+      select: {
+        correo_electronico: true,
+        nombre_completo_revisor: true,
+        denominacion_cargo: true,
+        nombre_unidad_revisora: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+    });
+
+    if (!compliance) {
+      throw new NotFoundException('Registro de cumplimiento no encontrado.');
+    }
+
+    return {
+      email: compliance.correo_electronico || compliance.user.email,
+      nombreevaluador: compliance.nombre_completo_revisor,
+      denominacionCargo: compliance.denominacion_cargo,
+      nombreUnidad: compliance.nombre_unidad_revisora,
+    };
   }
 }

@@ -24,7 +24,15 @@ import {
   ApiResponse,
   ApiParam,
 } from '@nestjs/swagger';
-import { User, ActaStatus } from '@prisma/client';
+import {
+  User,
+  Acta,
+  ActaStatus,
+  UserRole,
+  ActaCompliance,
+} from '@prisma/client';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { RolesGuard } from '../auth/guards/roles.guard';
 
 // Servicios
 import { ActasService } from './actas.service';
@@ -36,6 +44,8 @@ import { ActaComplianceService } from '../acta-compliance/acta-compliance.servic
 import { CreateActaDto } from '../auth/dto/create-acta.dto';
 import { UpdateActaDto } from '../auth/dto/update-acta.dto';
 import { GetActasFilterDto } from './dto/get-actas-filter.dto';
+import { ActaResponseDto } from './dto/actas-response.dto';
+import { ActaAdminInfoResponseDto } from './dto/acta-admin-info-response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { ACTAS_FINDINGS_MAP } from './actas.constants';
@@ -82,6 +92,7 @@ export class ActasController {
   @ApiResponse({
     status: 201,
     description: 'El acta ha sido creada exitosamente.',
+    type: ActaResponseDto,
   })
   create(@Body() createActaDto: CreateActaDto, @GetUser() user: User) {
     return this.actasService.create(createActaDto, user);
@@ -95,9 +106,75 @@ export class ActasController {
     return this.actasService.findAllForUser(user, filterDto);
   }
 
+  @Get('admin/all')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener TODAS las actas (ADMIN ONLY) con filtros y paginación',
+  })
+  findAllAdmin(@Query() filterDto: GetActasFilterDto) {
+    return this.actasService.findAll(filterDto);
+  }
+
+  @Get('admin/stats')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Obtener estadísticas de las actas (ADMIN ONLY)',
+  })
+  getStats() {
+    return this.actasService.getActasStats();
+  }
+
+  @Get('admin/:id/info')
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary:
+      'Obtener información específica de un acta formateada (ADMIN ONLY)',
+  })
+  @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Información formateada del acta.',
+    type: ActaAdminInfoResponseDto,
+  })
+  getAdminInfo(@Param('id', ParseUUIDPipe) id: string) {
+    return this.actasService.getActaInfoForAdmin(id);
+  }
+
+  @Get(':id/dias-restantes')
+  @ApiOperation({
+    summary:
+      'Obtener días restantes para la revisión (basado en fechaSuscripcion)',
+  })
+  @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Días restantes calculados.',
+    schema: {
+      type: 'object',
+      properties: {
+        diasRestantes: { type: 'number', nullable: true },
+        mensaje: { type: 'string' },
+      },
+    },
+  })
+  getDiasRestantes(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ) {
+    return this.actasService.getDiasRestantes(id, user);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Obtener un acta específica por ID' })
   @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Detalles del acta incluyendo campos calculados.',
+    type: ActaResponseDto,
+  })
   findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser() user: User) {
     return this.actasService.findOneForUser(id, user);
   }
@@ -105,6 +182,11 @@ export class ActasController {
   @Patch(':id')
   @ApiOperation({ summary: 'Actualizar un acta por ID' })
   @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Acta actualizada exitosamente.',
+    type: ActaResponseDto,
+  })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateActaDto: UpdateActaDto,
@@ -122,6 +204,21 @@ export class ActasController {
     return this.actasService.remove(id, user);
   }
 
+  @Patch(':id/entregar')
+  @ApiOperation({ summary: 'Marcar acta como ENTREGADA (Bloquea edición)' })
+  @ApiParam({ name: 'id', description: 'ID del acta (UUID)', type: 'string' })
+  @ApiResponse({
+    status: 200,
+    description: 'Acta marcada como entregada.',
+    type: ActaResponseDto,
+  })
+  async entregar(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ) {
+    return this.actasService.entregarActa(id, user);
+  }
+
   // --- GENERACIÓN DE DOCUMENTOS (CORREGIDA) ---
 
   @Get(':id/descargar-docx')
@@ -132,8 +229,16 @@ export class ActasController {
     @GetUser() user: User,
     @Res() res: Response,
   ) {
-    // 1. Obtenemos el acta base
-    const acta = await this.actasService.findOneForUser(id, user);
+    // 1. Obtenemos el acta base (Admin o User)
+    let acta: Acta;
+
+    if (user.role === UserRole.ADMIN) {
+      // Si es Admin, puede buscar cualquiera
+      acta = (await this.actasService.findOne(id)) as Acta;
+    } else {
+      // Si es User, solo las propias
+      acta = (await this.actasService.findOneForUser(id, user)) as Acta;
+    }
 
     // --- NUEVA VALIDACIÓN ---
     // Validamos que el acta tenga los datos mínimos requeridos
@@ -146,20 +251,39 @@ export class ActasController {
     // -------------------------
 
     // 2. LOGICA DE FUSIÓN: Traer datos del último compliance
-    // Buscamos el último checklist creado por el usuario
-    const complianceData = await this.actaComplianceService.findAllForUser(
-      user,
-      { limit: 1, page: 1 },
-    );
+    // Buscamos el último checklist creado por el usuario (OJO: Del dueño del acta, no necesariamente quien descarga)
+    let complianceData: { data: { id: string }[] };
+    if (user.role === UserRole.ADMIN) {
+      // Si es Admin, buscamos los compliance del dueño del acta
+      complianceData = await this.actaComplianceService.findAll({
+        userId: acta.userId,
+        limit: 1,
+        page: 1,
+      });
+    } else {
+      // Si es User, buscamos sus propios compliance
+      complianceData = await this.actaComplianceService.findAllForUser(user, {
+        limit: 1,
+        page: 1,
+      });
+    }
 
     let metadataParaDoc = acta.metadata as Record<string, any>;
 
     // Si existe un checklist, traemos sus detalles completos y mezclamos
     if (complianceData.data && complianceData.data.length > 0) {
-      const ultimoCompliance = await this.actaComplianceService.findOneForUser(
-        complianceData.data[0].id,
-        user,
-      );
+      let ultimoCompliance: ActaCompliance;
+      if (user.role === UserRole.ADMIN) {
+        // Admin usa búsqueda directa por ID (sin check de propiedad contra el user Admin)
+        ultimoCompliance = await this.actaComplianceService.findOneById(
+          complianceData.data[0].id,
+        );
+      } else {
+        ultimoCompliance = await this.actaComplianceService.findOneForUser(
+          complianceData.data[0].id,
+          user,
+        );
+      }
 
       metadataParaDoc = {
         ...ultimoCompliance, // Aquí vienen q1, q2... q98
@@ -193,8 +317,13 @@ export class ActasController {
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
   ) {
-    // 1. Obtenemos el acta base
-    const acta = await this.actasService.findOneForUser(id, user);
+    // 1. Obtenemos el acta base (Admin o User)
+    let acta: Acta;
+    if (user.role === UserRole.ADMIN) {
+      acta = (await this.actasService.findOne(id)) as Acta;
+    } else {
+      acta = (await this.actasService.findOneForUser(id, user)) as Acta;
+    }
 
     // --- NUEVA VALIDACIÓN ---
     // Validamos que el acta tenga los datos mínimos requeridos
@@ -207,18 +336,35 @@ export class ActasController {
     // -------------------------
 
     // 2. LOGICA DE FUSIÓN (Misma que arriba)
-    const complianceData = await this.actaComplianceService.findAllForUser(
-      user,
-      { limit: 1, page: 1 },
-    );
+    let complianceData: { data: { id: string }[] };
+    if (user.role === UserRole.ADMIN) {
+      complianceData = await this.actaComplianceService.findAll({
+        userId: acta.userId,
+        limit: 1,
+        page: 1,
+      });
+    } else {
+      complianceData = await this.actaComplianceService.findAllForUser(user, {
+        limit: 1,
+        page: 1,
+      });
+    }
 
     let metadataParaDoc = acta.metadata as Record<string, any>;
 
     if (complianceData.data && complianceData.data.length > 0) {
-      const ultimoCompliance = await this.actaComplianceService.findOneForUser(
-        complianceData.data[0].id,
-        user,
-      );
+      let ultimoCompliance: ActaCompliance;
+      if (user.role === UserRole.ADMIN) {
+        ultimoCompliance = await this.actaComplianceService.findOneById(
+          complianceData.data[0].id,
+        );
+      } else {
+        ultimoCompliance = await this.actaComplianceService.findOneForUser(
+          complianceData.data[0].id,
+          user,
+        );
+      }
+
       metadataParaDoc = {
         ...ultimoCompliance,
         ...metadataParaDoc,
@@ -228,9 +374,18 @@ export class ActasController {
     const actaFusionada = { ...acta, metadata: metadataParaDoc };
 
     // 3. Enviamos el documento con la data fusionada
+    // PRIORITY: Correo de la metadata > Correo del usuario
+    // PRIORITY: Correo de la metadata > Correo del usuario (Fallback)
+    // Buscamos 'correo_electronico' O 'email' en la metadata
+    const actaEmail =
+      (metadataParaDoc.correo_electronico as string) ||
+      (metadataParaDoc.email as string);
+
+    const emailDestino = actaEmail || user.email;
+
     await this.actaDocxService.generarYEnviarActa(
       actaFusionada,
-      user.email,
+      emailDestino,
       user.nombre,
     );
     await this.actasService.updateStatus(id, ActaStatus.ENVIADA);

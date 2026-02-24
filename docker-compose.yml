@@ -8,9 +8,11 @@ services:
     restart: always
     ports:
       - '3000:3000' # Mapea el puerto 3000 del contenedor al puerto 3000 de tu máquina
-    volumes:
-      - .:/usr/src/app # Sincroniza tu código local con el del contenedor para desarrollo
-      - /usr/src/app/node_modules # Evita que los node_modules locales sobrescriban los del contenedor
+    #volumes:
+    #  - .:/usr/src/app # Sincroniza tu código local con el del contenedor para desarrollo
+    #  - /usr/src/app/node_modules # Evita que los node_modules locales sobrescriban los del contenedor
+    env_file:
+      - .env
     environment:
       # Conecta a la base de datos del servicio 'db'
       DATABASE_URL: 'postgresql://admin:mysecretpassword@db:5432/acta_entrega_db?schema=public'

@@ -114,16 +114,24 @@ export class AuditAiService implements OnModuleInit {
     }
 
     const prompt = `
-      Actúa como un Asistente de IA experto en la normativa de administración pública de Venezuela y especialista en el proceso de elaboración de actas de entrega, conforme a la Ley Orgánica de la Contraloría General de la República y las "Normas para Regular la Entrega de los Órganos y Entidades de la Administración Pública".
+      Actúa como un Asistente de IA experto en la normativa de Administración Pública de Venezuela y especialista en el proceso de elaboración de actas de entrega, conforme a la Ley Orgánica de la Contraloría General de la República y las "Normas para Regular la Entrega de los Órganos y Entidades de la Administración Pública".
 
       Tu función es analizar una respuesta negativa ("NO") de un anexo de un acta de entrega. La pregunta que no fue respondida afirmativamente es: "${question}"
 
-      Basándote en el CONTEXTO legal que posees, genera una observación técnica que incluya:
-      1. Identificación del Anexo Faltante.
-      2. Importancia del Documento.
-      3. Fundamento Legal (Cita artículos de la Resolución 01-00-000162 si aplica).
-      4. Implicaciones Legales (Funcionario Saliente, Entrante, Máxima Autoridad).
-      5. Acción Correctiva Sugerida.
+      Basándote en el CONTEXTO legal que posees, debes generar una observación técnica y legal detallada que incluya los siguientes cinco puntos en un lenguaje profesional y claro:
+
+      1.  Identificación del anexo faltante: Menciona de forma precisa cuál es el documento o la información que no se está presentando.
+
+      2. Importancia del documento: Explica la finalidad de dicho anexo y por qué su presentación es fundamental para garantizar la continuidad administrativa, la transparencia y la correcta rendición de cuentas.
+
+      3.  Fundamento legal: Cita el (los) artículo(s) específico(s) de las "Normas para Regular la Entrega de los Órganos y Entidades de la Administración Pública" (Resolución CGR N.º 01-00-000162) que establecen la obligatoriedad de incluir dicho anexo.
+
+      4.  Implicaciones legales para los involucrados: Analiza y detalla las posibles consecuencias y responsabilidades para cada uno de los siguientes actores:
+          *   Para el servidor público saliente: Explica el riesgo de responsabilidad administrativa, citando el artículo del Reglamento de la Ley de Contraloría que genera una presunción de daño patrimonial en su contra por la omisión de anexos.
+          *   Para el servidor público entrante: Advierte sobre su deber de dejar constancia de la irregularidad y el riesgo que corre si no lo hace, mencionando el plazo de 120 días que tiene para formular observaciones.
+          *   Para la máxima autoridad: Señala su responsabilidad como supervisor del proceso y custodio del acta original.
+
+      5.  Acción correctiva sugerida: Recomienda de forma clara los pasos que deben seguirse para subsanar la omisión y completar el acta de entrega de manera adecuada, dejando constancia formal de la irregularidad.
 
       ---CONTEXTO---
       ${context.substring(0, 30000)}...

@@ -18,5 +18,6 @@ import { ActaComplianceModule } from '../acta-compliance/acta-compliance.module'
   ],
   controllers: [ActasController],
   providers: [ActasService, ActaDocxService],
+  exports: [ActasService], // <--- Exportar para AdminModule
 })
 export class ActasModule {}
