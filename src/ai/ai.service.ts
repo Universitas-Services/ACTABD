@@ -4,8 +4,9 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SessionsClient } from '@google-cloud/dialogflow-cx';
 import { PrismaService } from '../prisma/prisma.service';
-import { User } from '@prisma/client';
+import { User, Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import { GetChatUsersQueryDto } from './dto/get-chat-users-query.dto';
 
 @Injectable()
 export class AiService {
@@ -91,16 +92,36 @@ export class AiService {
 
   /**
    * Obtiene todos los usuarios que han usado el chatbot con estadísticas
-   * @returns Lista de usuarios con datos de perfil, último mensaje y estadísticas
+   * Soporta búsqueda por nombre/apellido y paginación
    */
-  async getUsersWithChatActivity() {
-    // Primera query: usuarios con datos de perfil
-    const users = await this.prisma.user.findMany({
-      where: {
-        chatHistory: {
-          some: {}, // Solo usuarios con al menos 1 mensaje
-        },
+  async getUsersWithChatActivity(query: GetChatUsersQueryDto) {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
+    // Construir filtro dinámico
+    const where: Prisma.UserWhereInput = {
+      chatHistory: {
+        some: {}, // Solo usuarios con al menos 1 mensaje
       },
+    };
+
+    // Filtro de búsqueda por nombre o apellido
+    if (search) {
+      where.OR = [
+        { nombre: { contains: search, mode: 'insensitive' } },
+        { apellido: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Conteo total para paginación
+    const totalItems = await this.prisma.user.count({ where });
+
+    // Primera query: usuarios con datos de perfil (paginados)
+    const users = await this.prisma.user.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         email: true,
@@ -167,7 +188,7 @@ export class AiService {
     );
 
     // Ordenar por última actividad (más reciente primero)
-    return usersWithDetails.sort((a, b) => {
+    const sortedUsers = usersWithDetails.sort((a, b) => {
       const dateA = a.ultimaActividad
         ? new Date(a.ultimaActividad).getTime()
         : 0;
@@ -176,6 +197,19 @@ export class AiService {
         : 0;
       return dateB - dateA;
     });
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: sortedUsers,
+      meta: {
+        totalItems,
+        itemCount: sortedUsers.length,
+        itemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+      },
+    };
   }
 
   /**

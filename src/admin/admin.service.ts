@@ -40,17 +40,29 @@ export class AdminService {
   // 5. Método para listar todos los usuarios
   // 5. Método para listar todos los usuarios (con paginación y filtros)
   async findAllUsers(query: GetUsersQueryDto) {
-    const { page = 1, limit = 10, role, search } = query;
+    const { page = 1, limit = 10, role, search, tipoPlan, isActive } = query;
     const skip = (page - 1) * limit;
 
     // Construir el filtro dinámicamente
     const where: Prisma.UserWhereInput = {
-      isActive: true,
       role: {
         not: UserRole.ADMIN,
       },
     };
 
+    // Filtro por estado activo/suspendido (si se envía)
+    if (isActive !== undefined) {
+      where.isActive = isActive;
+    }
+
+    // Filtro por tipo de plan
+    if (tipoPlan === 'GRATIS') {
+      where.role = UserRole.USER;
+    } else if (tipoPlan === 'PAGO') {
+      where.role = UserRole.PAID_USER;
+    }
+
+    // Si se envía role directamente, tiene prioridad
     if (role) {
       where.role = role;
     }
@@ -140,6 +152,37 @@ export class AdminService {
       message: 'Proceso de eliminación masiva completado.',
       totalRequested: userIds.length,
       affectedCount: result.count,
+    };
+  }
+
+  // 8. Activar o desactivar un usuario (Toggle isActive)
+  async toggleUserActive(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`Usuario con ID ${userId} no encontrado.`);
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: { isActive: !user.isActive },
+      select: {
+        id: true,
+        email: true,
+        nombre: true,
+        apellido: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    return {
+      message: updatedUser.isActive
+        ? 'El usuario ha sido activado exitosamente.'
+        : 'El usuario ha sido suspendido exitosamente.',
+      user: updatedUser,
     };
   }
 }

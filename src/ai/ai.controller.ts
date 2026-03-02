@@ -25,6 +25,7 @@ import {
   ApiTags,
   ApiQuery,
 } from '@nestjs/swagger';
+import { GetChatUsersQueryDto } from './dto/get-chat-users-query.dto';
 @ApiTags('Chatbot AI') // <-- Agrupa bajo "Chatbot AI"
 @ApiBearerAuth()
 @Controller('ai')
@@ -106,8 +107,8 @@ export class AiController {
     status: HttpStatus.FORBIDDEN,
     description: 'No autorizado. Solo administradores.',
   })
-  async getAllUsersWithChat() {
-    return this.aiService.getUsersWithChatActivity();
+  async getAllUsersWithChat(@Query() query: GetChatUsersQueryDto) {
+    return this.aiService.getUsersWithChatActivity(query);
   }
 
   @Get('admin/users/:userId/conversations')
