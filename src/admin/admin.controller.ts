@@ -116,6 +116,22 @@ export class AdminController {
     return this.adminService.bulkDeleteUsers(bulkDeleteUsersDto.userIds);
   }
 
+  @Patch('users/:id/toggle-active')
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Activar o desactivar un usuario (Alterna el estado isActive)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Estado del usuario actualizado exitosamente.',
+  })
+  @ApiResponse({ status: 404, description: 'Usuario no encontrado.' })
+  @ApiResponse({ status: 403, description: 'Acceso denegado.' })
+  toggleUserActive(@Param('id') id: string) {
+    return this.adminService.toggleUserActive(id);
+  }
+
   // --- NUEVOS ENDPOINTS DE ESTADÍSTICAS POR USUARIO ---
 
   @Get('users/:userId/actas')
