@@ -2,8 +2,9 @@
 
 // 1. Configuración del proveedor de base de datos y la URL
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL") // Lee la URL desde el archivo .env
+  provider  = "postgresql"
+  url       = env("DATABASE_URL") // Runtime (pooler / Cloud SQL socket)
+  directUrl = env("DIRECT_URL") // Migraciones Prisma (conexión directa)
 }
 
 // 2. Configuración del generador del cliente de Prisma

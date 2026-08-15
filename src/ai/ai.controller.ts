@@ -34,7 +34,9 @@ export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('message')
-  @ApiOperation({ summary: 'Enviar un mensaje al agente de IA' })
+  @ApiOperation({
+    summary: 'Enviar un mensaje al agente ADK (vía gateway Cloud Run)',
+  })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Devuelve la respuesta del agente y el ID de la sesión.',
@@ -52,7 +54,7 @@ export class AiController {
     // Si no se proporciona un sessionId, se genera uno nuevo para la conversación.
     const sessionId = providedSessionId || this.aiService.generateSessionId();
 
-    // 1. Obtiene la respuesta del bot
+    // 1. Obtiene la respuesta del bot (gateway ADK, ya no Dialogflow CX)
     const botResponse = await this.aiService.detectIntentText(
       message,
       sessionId,

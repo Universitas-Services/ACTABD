@@ -16,8 +16,10 @@ services:
     environment:
       # Conecta a la base de datos del servicio 'db'
       DATABASE_URL: 'postgresql://admin:mysecretpassword@db:5432/acta_entrega_db?schema=public'
+      DIRECT_URL: 'postgresql://admin:mysecretpassword@db:5432/acta_entrega_db?schema=public'
       JWT_SECRET: 'tu-super-secreto-de-desarrollo' # Puedes cambiarlo o usar un .env
       # ... otras variables de entorno que necesites ...
+      ADK_GATEWAY_URL: 'https://gateway-actas-entrega-951100463087.us-east1.run.app'
     depends_on:
       - db # Asegura que el servicio 'db' se inicie antes que el 'api'
 
