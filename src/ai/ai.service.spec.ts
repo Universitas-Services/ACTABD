@@ -1,105 +1,69 @@
-// src/ai/ai.service.ts
-
-import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SessionsClient } from '@google-cloud/dialogflow-cx';
+import { AiService } from './ai.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { User } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
 
-@Injectable()
-export class AiService {
-  private readonly sessionsClient: SessionsClient;
-  private readonly projectId: string;
-  private readonly location: string;
-  private readonly agentId: string;
+describe('AiService', () => {
+  let service: AiService;
+  const fetchMock = jest.fn();
 
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
-  ) {
-    const keyFilename = this.configService.get<string>(
-      'GOOGLE_APPLICATION_CREDENTIALS',
-    );
-    const projectId = this.configService.get<string>('DIALOGFLOW_PROJECT_ID');
-    const location = this.configService.get<string>('DIALOGFLOW_LOCATION');
-    const agentId = this.configService.get<string>('DIALOGFLOW_AGENT_ID');
+  beforeEach(() => {
+    jest.clearAllMocks();
+    global.fetch = fetchMock as unknown as typeof fetch;
 
-    if (!keyFilename || !projectId || !location || !agentId) {
-      throw new Error(
-        'Faltan variables de entorno necesarias para Dialogflow CX.',
-      );
-    }
-
-    this.projectId = projectId;
-    this.location = location;
-    this.agentId = agentId;
-    this.sessionsClient = new SessionsClient({ keyFilename });
-  }
-
-  /**
-   * Envía un texto a Dialogflow CX y devuelve la respuesta del agente.
-   */
-  async detectIntentText(text: string, sessionId: string): Promise<string> {
-    const sessionPath = this.sessionsClient.projectLocationAgentSessionPath(
-      this.projectId,
-      this.location,
-      this.agentId,
-      sessionId,
-    );
-
-    const request = {
-      session: sessionPath,
-      queryInput: {
-        text: { text: text },
-        languageCode: 'es',
+    const configService = {
+      get: (key: string) => {
+        if (key === 'ADK_GATEWAY_URL') {
+          return 'https://gateway-actas-entrega-951100463087.us-east1.run.app';
+        }
+        if (key === 'ADK_GATEWAY_TIMEOUT_MS') {
+          return '5000';
+        }
+        return undefined;
       },
-    };
+    } as ConfigService;
 
-    try {
-      const [response] = await this.sessionsClient.detectIntent(request);
-      let botResponse = '';
+    service = new AiService(configService, {} as PrismaService);
+  });
 
-      for (const message of response.queryResult?.responseMessages || []) {
-        const textParts = message.text?.text || [];
-        botResponse += textParts.join(' ');
-      }
+  it('should be defined', () => {
+    expect(service).toBeDefined();
+  });
 
-      return (
-        botResponse ||
-        'No he podido entender eso. ¿Puedes decirlo de otra forma?'
-      );
-    } catch (error) {
-      console.error('Error al contactar con Dialogflow CX:', error);
-      return 'Lo siento, estoy teniendo problemas para conectarme. Por favor, inténtalo más tarde.';
-    }
-  }
-
-  /**
-   * Guarda un intercambio del chat en la base de datos.
-   */
-  async saveChatHistory(
-    user: User,
-    sessionId: string,
-    userMessage: string,
-    botResponse: string,
-  ) {
-    return this.prisma.chatHistory.create({
-      data: {
-        sessionId,
-        userMessage,
-        botResponse,
-        user: {
-          connect: { id: user.id },
-        },
-      },
+  it('should call ADK gateway /api/chat and return response text', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          response: 'Hola, soy el agente ADK',
+          session_id: 'session-1',
+        }),
     });
-  }
 
-  /**
-   * Genera un nuevo ID de sesión.
-   */
-  generateSessionId(): string {
-    return uuidv4();
-  }
-}
+    const reply = await service.detectIntentText('Hola', 'session-1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://gateway-actas-entrega-951100463087.us-east1.run.app/api/chat',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: 'Hola',
+          session_id: 'session-1',
+        }),
+      }),
+    );
+    expect(reply).toBe('Hola, soy el agente ADK');
+  });
+
+  it('should return fallback message when gateway fails', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: () => Promise.resolve('AI agent unavailable'),
+    });
+
+    const reply = await service.detectIntentText('Hola', 'session-1');
+
+    expect(reply).toContain('problemas para conectarme');
+  });
+});

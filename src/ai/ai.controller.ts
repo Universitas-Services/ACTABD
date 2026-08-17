@@ -25,6 +25,7 @@ import {
   ApiTags,
   ApiQuery,
 } from '@nestjs/swagger';
+import { GetChatUsersQueryDto } from './dto/get-chat-users-query.dto';
 @ApiTags('Chatbot AI') // <-- Agrupa bajo "Chatbot AI"
 @ApiBearerAuth()
 @Controller('ai')
@@ -33,7 +34,9 @@ export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post('message')
-  @ApiOperation({ summary: 'Enviar un mensaje al agente de IA' })
+  @ApiOperation({
+    summary: 'Enviar un mensaje al agente ADK (vía gateway Cloud Run)',
+  })
   @ApiResponse({
     status: HttpStatus.OK,
     description: 'Devuelve la respuesta del agente y el ID de la sesión.',
@@ -51,7 +54,7 @@ export class AiController {
     // Si no se proporciona un sessionId, se genera uno nuevo para la conversación.
     const sessionId = providedSessionId || this.aiService.generateSessionId();
 
-    // 1. Obtiene la respuesta del bot
+    // 1. Obtiene la respuesta del bot (gateway ADK, ya no Dialogflow CX)
     const botResponse = await this.aiService.detectIntentText(
       message,
       sessionId,
@@ -106,8 +109,8 @@ export class AiController {
     status: HttpStatus.FORBIDDEN,
     description: 'No autorizado. Solo administradores.',
   })
-  async getAllUsersWithChat() {
-    return this.aiService.getUsersWithChatActivity();
+  async getAllUsersWithChat(@Query() query: GetChatUsersQueryDto) {
+    return this.aiService.getUsersWithChatActivity(query);
   }
 
   @Get('admin/users/:userId/conversations')

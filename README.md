@@ -1,98 +1,104 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ACTABD — API de Actas de Entrega
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend NestJS (TypeScript) para el sistema de actas de entrega de Universitas. Expone una API REST con autenticación JWT, persistencia en PostgreSQL (Prisma) y un chatbot que habla con el **Gateway ADK** en Cloud Run (ya no usa Dialogflow CX).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+- Swagger (producción): https://actabd-api-693924722323.us-central1.run.app/api
+- Frontend: https://app.actadeentrega.online
+- Gateway ADK: https://gateway-actas-entrega-951100463087.us-east1.run.app
 
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+Frontend (Netlify)
+  → esta API (Cloud Run)  POST /ai/message  [JWT + historial]
+      → Gateway ADK       POST /api/chat
+          → Vertex Agent Engine
+  → Cloud SQL PostgreSQL
 ```
 
-## Compile and run the project
+## Requisitos
+
+- Node.js 20+
+- PostgreSQL 15+ (local o Cloud SQL)
+- Copia de `.env.example` como `.env`
+
+## Configuración
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
+cp .env.example .env
+npx prisma generate
+npx prisma migrate deploy
+npm run start:dev
 ```
 
-## Run tests
+Swagger local: http://localhost:3000/api
+
+### Docker (API + Postgres local)
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+docker compose up --build
 ```
 
-## Deployment
+La API queda en el puerto `3000`. Postgres se publica en `5433`.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+## Variables de entorno
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+| Variable | Uso |
+|----------|-----|
+| `DATABASE_URL` | Conexión Prisma en runtime |
+| `DIRECT_URL` | Conexión directa para `prisma migrate deploy` (puede ser igual a `DATABASE_URL` si no hay pooler) |
+| `JWT_SECRET` | Firma de tokens |
+| `FRONTEND_URL` | Origen del frontend (enlaces de email) |
+| `BACKEND_URL` | URL pública de esta API |
+| `RESEND_API_KEY` / `FROM_EMAIL` | Envío de correos |
+| `ADK_GATEWAY_URL` | Base URL del Gateway ADK |
+| `ADK_GATEWAY_TIMEOUT_MS` | Timeout HTTP al Gateway (default `120000`) |
+
+### Cloud Run + Cloud SQL
+
+```text
+postgresql://USER:PASSWORD@localhost:5432/DB_NAME?host=/cloudsql/PROJECT:REGION:INSTANCE
+```
+
+Si la contraseña tiene caracteres especiales (`*`, `@`, `#`), hay que URL-encodearlos (`*` → `%2A`).
+
+## Chatbot
+
+El frontend **no** debe llamar al Gateway. Usa esta API:
+
+```http
+POST /ai/message
+Authorization: Bearer <jwt>
+Content-Type: application/json
+
+{
+  "message": "Hola, necesito ayuda",
+  "sessionId": "id-estable-de-la-conversacion"
+}
+```
+
+- `message`: 1–4096 caracteres
+- `sessionId`: opcional, 1–128 caracteres. Si no viene, el backend genera uno; reutilízalo en la misma conversación.
+
+El backend traduce a `{ "message", "session_id" }` y llama `POST {ADK_GATEWAY_URL}/api/chat`.
+
+## Scripts
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npm run start:dev    # desarrollo
+npm run build
+npm run start:prod   # node dist/main
+npm run test
+npx prisma studio    # UI de la base (requiere DATABASE_URL accesible)
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+En Cloud Run el contenedor ejecuta `start.sh`: `prisma generate` → `prisma migrate deploy` → `node dist/main.js`.
 
-## Resources
+## Deploy (GCP)
 
-Check out a few resources that may come in handy when working with NestJS:
+Imagen: Artifact Registry `us-central1-docker.pkg.dev/agente-manual-contrataciones/actabd/actabd-api`
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+Servicio Cloud Run: `actabd-api` (región `us-central1`), con instancia Cloud SQL `agente-manual-contrataciones:us-central1:cluster-produccion-01`.
 
-## Support
+## Licencia
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+UNLICENSED (proyecto privado Universitas).

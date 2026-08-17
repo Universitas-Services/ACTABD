@@ -1,71 +1,80 @@
 // src/ai/ai.service.ts
 
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SessionsClient } from '@google-cloud/dialogflow-cx';
 import { PrismaService } from '../prisma/prisma.service';
-import { User } from '@prisma/client';
+import { User, Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import { GetChatUsersQueryDto } from './dto/get-chat-users-query.dto';
+
+type AdkChatResponse = {
+  response?: string;
+  session_id?: string;
+};
 
 @Injectable()
 export class AiService {
-  private readonly sessionsClient: SessionsClient;
-  private readonly projectId: string;
-  private readonly location: string;
-  private readonly agentId: string;
+  private readonly logger = new Logger(AiService.name);
+  private readonly gatewayUrl: string;
+  private readonly gatewayTimeoutMs: number;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    const keyFilename = this.configService.get<string>(
-      'GOOGLE_APPLICATION_CREDENTIALS',
-    );
-    const projectId = this.configService.get<string>('DIALOGFLOW_PROJECT_ID');
-    const location = this.configService.get<string>('DIALOGFLOW_LOCATION');
-    const agentId = this.configService.get<string>('DIALOGFLOW_AGENT_ID');
+    const gatewayUrl = this.configService.get<string>('ADK_GATEWAY_URL');
 
-    if (!keyFilename || !projectId || !location || !agentId) {
+    if (!gatewayUrl) {
       throw new Error(
-        'Faltan variables de entorno necesarias para Dialogflow CX.',
+        'Falta la variable de entorno ADK_GATEWAY_URL (gateway ADK en Cloud Run).',
       );
     }
 
-    this.projectId = projectId;
-    this.location = location;
-    this.agentId = agentId;
-    this.sessionsClient = new SessionsClient({ keyFilename });
+    this.gatewayUrl = gatewayUrl.replace(/\/$/, '');
+    this.gatewayTimeoutMs =
+      Number(this.configService.get<string>('ADK_GATEWAY_TIMEOUT_MS')) ||
+      120_000;
   }
 
+  /**
+   * Envía un mensaje al gateway ADK (Vertex Reasoning Engine) y devuelve
+   * la respuesta en texto del agente.
+   */
   async detectIntentText(text: string, sessionId: string): Promise<string> {
-    const sessionPath = this.sessionsClient.projectLocationAgentSessionPath(
-      this.projectId,
-      this.location,
-      this.agentId,
-      sessionId,
-    );
-    const request = {
-      session: sessionPath,
-      queryInput: { text: { text }, languageCode: 'es' },
-    };
+    const url = `${this.gatewayUrl}/api/chat`;
+
     try {
-      const [response] = await this.sessionsClient.detectIntent(request);
-      let botResponse = '';
-      for (const message of response.queryResult?.responseMessages || []) {
-        const textParts = message.text?.text || [];
-        botResponse += textParts.join(' ');
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text,
+          session_id: sessionId,
+        }),
+        signal: AbortSignal.timeout(this.gatewayTimeoutMs),
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text().catch(() => '');
+        this.logger.error(
+          `Gateway ADK respondió ${response.status}: ${errorBody}`,
+        );
+        return 'Lo siento, estoy teniendo problemas para conectarme. Por favor, inténtalo más tarde.';
       }
+
+      const data = (await response.json()) as AdkChatResponse;
+      const botResponse = data.response?.trim();
+
       return (
         botResponse ||
         'No he podido entender eso. ¿Puedes decirlo de otra forma?'
       );
     } catch (error) {
-      console.error('Error al contactar con Dialogflow CX:', error);
+      this.logger.error('Error al contactar el gateway ADK', error);
       return 'Lo siento, estoy teniendo problemas para conectarme. Por favor, inténtalo más tarde.';
     }
   }
 
-  // --- 👇 ESTE MÉTODO SOLUCIONA UNO DE LOS ERRORES ---
   async saveChatHistory(
     user: User,
     sessionId: string,
@@ -82,25 +91,42 @@ export class AiService {
     });
   }
 
-  // --- 👇 ESTE MÉTODO SOLUCIONA EL OTRO ERROR ---
   generateSessionId(): string {
     return uuidv4();
   }
 
-  // --- 👇 NUEVOS MÉTODOS PARA ADMINISTRADORES ---
-
   /**
    * Obtiene todos los usuarios que han usado el chatbot con estadísticas
-   * @returns Lista de usuarios con datos de perfil, último mensaje y estadísticas
+   * Soporta búsqueda por nombre/apellido y paginación
    */
-  async getUsersWithChatActivity() {
-    // Primera query: usuarios con datos de perfil
-    const users = await this.prisma.user.findMany({
-      where: {
-        chatHistory: {
-          some: {}, // Solo usuarios con al menos 1 mensaje
-        },
+  async getUsersWithChatActivity(query: GetChatUsersQueryDto) {
+    const { page = 1, limit = 10, search } = query;
+    const skip = (page - 1) * limit;
+
+    // Construir filtro dinámico
+    const where: Prisma.UserWhereInput = {
+      chatHistory: {
+        some: {}, // Solo usuarios con al menos 1 mensaje
       },
+    };
+
+    // Filtro de búsqueda por nombre o apellido
+    if (search) {
+      where.OR = [
+        { nombre: { contains: search, mode: 'insensitive' } },
+        { apellido: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+
+    // Conteo total para paginación
+    const totalItems = await this.prisma.user.count({ where });
+
+    // Primera query: usuarios con datos de perfil (paginados)
+    const users = await this.prisma.user.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         email: true,
@@ -167,7 +193,7 @@ export class AiService {
     );
 
     // Ordenar por última actividad (más reciente primero)
-    return usersWithDetails.sort((a, b) => {
+    const sortedUsers = usersWithDetails.sort((a, b) => {
       const dateA = a.ultimaActividad
         ? new Date(a.ultimaActividad).getTime()
         : 0;
@@ -176,6 +202,19 @@ export class AiService {
         : 0;
       return dateB - dateA;
     });
+
+    const totalPages = Math.ceil(totalItems / limit);
+
+    return {
+      data: sortedUsers,
+      meta: {
+        totalItems,
+        itemCount: sortedUsers.length,
+        itemsPerPage: limit,
+        totalPages,
+        currentPage: page,
+      },
+    };
   }
 
   /**
