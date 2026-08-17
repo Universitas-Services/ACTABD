@@ -32,10 +32,11 @@ describe('AiService', () => {
   it('should call ADK gateway /api/chat and return response text', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
-      json: async () => ({
-        response: 'Hola, soy el agente ADK',
-        session_id: 'session-1',
-      }),
+      json: () =>
+        Promise.resolve({
+          response: 'Hola, soy el agente ADK',
+          session_id: 'session-1',
+        }),
     });
 
     const reply = await service.detectIntentText('Hola', 'session-1');
@@ -58,7 +59,7 @@ describe('AiService', () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 503,
-      text: async () => 'AI agent unavailable',
+      text: () => Promise.resolve('AI agent unavailable'),
     });
 
     const reply = await service.detectIntentText('Hola', 'session-1');

@@ -19,7 +19,7 @@ export class SendMessageDto {
   @IsNotEmpty()
   @MinLength(1)
   @MaxLength(4096)
-  message: string;
+  message!: string;
 
   @ApiProperty({
     required: false,
